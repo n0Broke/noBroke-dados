@@ -4,6 +4,10 @@ import time
 import datetime
 import os
 
+#Criar uma pasta 
+existePasta = os.path.exists('./csv')
+if not existePasta:
+  os.mkdir('./csv') 
 
 #Verificar se Arquivo Existe
 existeCSV = os.path.exists('./csv/capturaDados.csv')
@@ -26,5 +30,5 @@ with open('./csv/capturaDados.csv', 'a', newline ='') as csvfile:
    if not existeCSV:
       writer.writerow(Header)
    while True:
-    writer.writerows(dadosCapturados)
-    time.sleep(10)
+      writer.writerows(dadosCapturados)
+      time.sleep(1)
