@@ -4,31 +4,31 @@ import time
 import datetime
 import os
 
-#Criar uma pasta 
-existePasta = os.path.exists('./csv')
-if not existePasta:
-  os.mkdir('./csv') 
-
-#Verificar se Arquivo Existe
+#Verificar se o Arquivo Existe
 existeCSV = os.path.exists('./csv/capturaDados.csv')
 
-#Obtenção dos dados via psutil
-horaAtual = datetime.datetime.now()
-ram = psutil.virtual_memory().percent
-cpu = psutil.cpu_percent(interval=1)
-disk = psutil.disk_usage('/').percent
-diskUsed = psutil.disk_usage("/").used
-diskFree = psutil.disk_usage("/").free
+#Criando o Header
+header = ['horaCaptura', 'CPU', 'RAM', 'DISCO', 'DISCO USADO', 'DISCO LIVRE']
 
-#Criação das Arrays para exibição dentro do CSV
-dadosCapturados = [[horaAtual, cpu, ram, disk, diskUsed, diskFree]]
-Header = ['horaCaptura', 'CPU', 'RAM', 'DISCO', 'DISCO USADO', 'DISCO LIVRE']
+#Criando o arquivo CSV utilizando a biblioteca CSV
+with open('./csv/capturaDados.csv', 'a', newline='') as csvfile:
+    writer = csv.writer(csvfile)
 
-#Criação do CSV
-with open('./csv/capturaDados.csv', 'a', newline ='') as csvfile:
-   writer = csv.writer(csvfile)
-   if not existeCSV:
-      writer.writerow(Header)
-   while True:
-      writer.writerows(dadosCapturados)
-      time.sleep(1)
+#Vendo se precisa ou não precisa sobreescrevar o CSV
+    if not existeCSV:
+        writer.writerow(header)
+
+#Capturando os dados em looping
+    while True:
+        horaAtual = datetime.datetime.now()
+        ram = psutil.virtual_memory().percent
+        cpu = psutil.cpu_percent(interval=1)
+        disk = psutil.disk_usage('/').percent
+        diskUsed = psutil.disk_usage('/').used
+        diskFree = psutil.disk_usage('/').free
+
+        dadosCapturados = [horaAtual, cpu, ram, disk, diskUsed, diskFree]
+
+        writer.writerow(dadosCapturados)
+
+        time.sleep(60)
