@@ -3,7 +3,7 @@ import time
 import os
 
 #Caminhos de Entrada
-caminhoEntrada = './csv/capturaDados.csv'
+caminhoEntrada = './csv/escalavel.csv'
 caminhoSaida = './csv/dadosTratados.csv'
 
 #Loop para continuamente gerar Relátorios de Leitura
