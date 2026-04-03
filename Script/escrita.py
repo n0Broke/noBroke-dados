@@ -14,8 +14,8 @@ fuso_brasil = pytz.timezone('America/Sao_Paulo')
 
 
 resultados = {
-    "timestamp": [],
     "home_broker":[],
+    "timestamp": [],
     "cpu_percent":[], 
     "cpu_freq_current":[], 
     "cpu_time_idle": [],
@@ -287,6 +287,10 @@ def coletar_latencia_resposta_ms():
             if "time=" in linha:
                 tempo_str = linha.split("time=")[1].split(" ")[0]
                 return round(float(tempo_str), 2)
+            elif "tempo=" in linha:
+                tempo_str = linha.split("tempo=")[1].split("ms")[0].strip()
+                return round(float(tempo_str), 2)
+        return 0.0
             
 def print_barra(Componente, nomeComponente, metrica, limite_barra, numDivisao):
     calculo_total_barras = int(limite_barra * (Componente/numDivisao))
@@ -378,7 +382,7 @@ def print_barra(Componente, nomeComponente, metrica, limite_barra, numDivisao):
 
 nome_servidor = psutil.users()[0].name
 memoria_total = round(conversao_gb(psutil.virtual_memory().total),2)
-arquivo_csv = "escalavel.csv"
+arquivo_csv = "Raw.csv"
 
 # def carregamento():
 #     for i in range(1,101):
@@ -418,8 +422,8 @@ for i in range(1, 41):
     total_processos = coletar_total_processos()
 
 
-    resultados["timestamp"].append(horario_tratado)
     resultados["home_broker"].append(nome_servidor)
+    resultados["timestamp"].append(horario_tratado)
     resultados["cpu_percent"].append(cpu_porcentagem)
     resultados["cpu_freq_current"].append(cpu_frequencia_atual)
     resultados["cpu_time_idle"].append(cpu_tempo_ocioso)
@@ -477,5 +481,5 @@ for i in range(1, 41):
 
          +------------------------------------------------------------------------------+
           """)
-    pandas.DataFrame(resultados).to_csv("escalavel.csv", encoding="utf-8", sep=";", index=False)
+    pandas.DataFrame(resultados).to_csv(arquivo_csv, encoding="utf-8", sep=";", index=False)
     time.sleep(5)
