@@ -6,12 +6,22 @@ import time
 from datetime import datetime
 import pytz
 import pyfiglet
+import boto3
 # import sys
 import subprocess
 import platform
 
 fuso_brasil = pytz.timezone('America/Sao_Paulo')
 
+NAME_CSV = "Raw.csv"
+NAME_BUCKET = 's3-bucket-projeto-unico'#Vamos mudar pra um nome do projeto
+
+s3_client = boto3.client(
+    's3'
+    #COLOCAR AS CREDENCIAIS AQUI, 
+    #!!!!!!!!!!!!!ATENÇÃO!!!!!!!!!!!!!!
+    # NÃO COMITE AS CREDENDIACIS DA AWS
+)
 
 resultados = {
     "home_broker":[],
@@ -382,7 +392,7 @@ def print_barra(Componente, nomeComponente, metrica, limite_barra, numDivisao):
 
 nome_servidor = psutil.users()[0].name
 memoria_total = round(conversao_gb(psutil.virtual_memory().total),2)
-arquivo_csv = "Raw.csv"
+
 
 # def carregamento():
 #     for i in range(1,101):
@@ -395,7 +405,7 @@ print(f"HORÁRIO AGORA = {datetime.now().strftime("%d/%m/%Y %H:%M")}")
 print(pyfiglet.figlet_format("n0Broke-Script"))
 # print(carregamento())
 
-# with open(arquivo_csv, mode="w",  newline='', encoding="utf-8") as file:
+# with open(NAME_csv, mode="w",  newline='', encoding="utf-8") as file:
 #         writer = csv.writer(file, delimiter=";")
 #         writer.writerow(["Nome", " Data", " CPU(%)", "Freq-CPU(hz)", "Ociosidade-CPU", " Mémoria-total", " Mémoria-disponivel", " Mémoria-used", " Memoria-free", "Memoria-percent(%)","Swap-used"," Swap-free", "Bytes-sent","Bytes-recv"," Latencia(ms)","Processos-ativos"])
 
@@ -481,5 +491,13 @@ for i in range(1, 41):
 
          +------------------------------------------------------------------------------+
           """)
-    pandas.DataFrame(resultados).to_csv(arquivo_csv, encoding="utf-8", sep=";", index=False)
+    pandas.DataFrame(resultados).to_csv(NAME_CSV, encoding="utf-8", sep=";", index=False)
+
+    try:
+        s3_client.upload_file(NAME_CSV, NAME_BUCKET,f'RAW/{NAME_CSV}')
+        print(f'Dados enviados ao bucket')
+    except:
+           print(f'Problema no envio dos dados para o bucket')
     time.sleep(5)
+
+
