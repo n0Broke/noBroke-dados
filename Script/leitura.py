@@ -2,6 +2,7 @@ import pandas as pd
 import boto3 #sdk da aws que interage com o s3
 import requests
 import json
+import time
 from io import StringIO
 
 NAME_BUCKET = 's3-bucket-projeto-unico' #Vamos mudar pra um nome do projeto
@@ -12,11 +13,11 @@ SITE_URL= '' #tem que subir na ec2 pra enviar o json, futuramente colocar a url 
 
 
 s3_client = boto3.client(
-    's3'
-    #COLOCAR AS CREDENCIAIS AQUI, 
+    's3',
+     #COLOCAR AS CREDENCIAIS AQUI, 
     #!!!!!!!!!!!!!ATENÇÃO!!!!!!!!!!!!!!
     # NÃO COMITE AS CREDENDIACIS DA AWS
-    )
+)
 
 
 def ETL():
@@ -27,37 +28,59 @@ def ETL():
          
         print("(TRANSFORM) Removendo cópias")
         df_trusted = df_raw.drop_duplicates()
+        print("(TRANSFORM) Removendo valores iguais a 0")
+        df_trusted = df_trusted.replace(0, '')
+        print("(TRANSFORM) Removendo valores nulos")
+        df_trusted = df_trusted.dropna()
+
 
         # Salva no diretório trusted
         Salvar_s3(df_trusted, TRUSTED_WAY)
+        pd.DataFrame(df_trusted).to_csv("trusted.csv", encoding="utf-8", sep=";", index=False)
 
-        print("Mandando dados para o diretório 'client'")
+        print("(LOADING) Mandando dados para o diretório 'client'")
         df_client = df_trusted.copy() 
         
-        df_client['timestamp'] = pd.to_datetime(df_client['timestamp']) # transforma a string da data em formato data e hora
+        # df_client['timestamp'] = pd.to_datetime(df_client['timestamp'])
+        # transforma a string da data em formato data e hora
         
         # Salva no client
         Salvar_s3(df_client, CLIENT_WAY)
 
-        print("Convertendo Client para JSON e enviando para o site na EC2...")
-        # Transforma os dados em JSON em formata de dicionário 
+        print("(LOADING) Convertendo Client para JSON e enviando para o site na EC2...")
+
+        df_client.to_json('client.json', orient='records', lines=False,)
         dados_json = df_client.to_dict(orient='records')
+        with open('client.json', 'w') as f:
+            json.dump(dados_json, f, indent=4, default=str)
+            print("(LOADING) Enviando o Json pro bucket")
+            s3_client.put_object(Body='client.json',Bucket=NAME_BUCKET, Key='CLIENT/client.json')
+
+
+        # Transforma os dados em JSON em formata de dicionário 
         
-        headers = {'Content-Type': 'application/json'} # pra avisar a API da EC2 que é um Json (ainda não está funcionando)
-        response_api = requests.post(SITE_URL, json=dados_json, headers=headers)
+        # headers = {'Content-Type': 'application/json'} # pra avisar a API da EC2 que é um Json (ainda não está funcionando)
 
-        if response_api.status_code == 200:
-            print("Sucesso: Dados integrados ao site na EC2!")
-        else:
-            print(f"Aviso: API retornou status {response_api.status_code}")
-    except Exception:
-        print(f"Erro no fluxo da ETL: {Exception}")
+        # response_api = requests.post(SITE_URL, json=dados_json, headers=headers)
 
-def Salvar_s3(df, key):
+        # if response_api.status_code == 200:
+        #     print("Sucesso: Dados integrados ao site na EC2!")
+        # else:
+        #     print(f"Aviso: API retornou status {response_api.status_code}")
+    
+    
+    
+    except:
+        print(f"Erro no envio de dados")
+
+def Salvar_s3(df, Key): # nome do data frame/ dados e caminho no bucket
     csv_buffer = StringIO()
     df.to_csv(csv_buffer, index=False, sep=';')
-    s3_client.put_object(Bucket=NAME_BUCKET, Key=key, Body=csv_buffer.getvalue())
-    print(f"Arquivo salvo: {key}")
+    s3_client.put_object(Bucket=NAME_BUCKET, Key=Key, Body=csv_buffer.getvalue())
+    print(f"Arquivo salvo: {Key}")
 
 if __name__ == "__main__":
-    ETL()
+
+    while True:
+        ETL()
+        time.sleep(15)
