@@ -11,7 +11,7 @@ import platform
 
 fuso_brasil = pytz.timezone('America/Sao_Paulo')
 
-NAME_CSV = "Raw.csv"
+
 NAME_BUCKET = 's3-bucket-projeto-unico'#Vamos mudar pra um nome do projeto
 
 s3_client = boto3.client(
@@ -138,23 +138,20 @@ def coletar_latencia_resposta_ms():
         return 0.0
 
 def pid_consumindo_mais():
-    for processo in psutil.process_iter(['pid', 'name']):
-        try:
-            processo.cpu_percent()
-        except ():
-            print("não pegou o processo")
-
-    time.sleep(0.5)
+    processo_daVez = "Nenhum"
     cpu_max = -1
-
-    for processo in psutil.process_iter(['pid', 'name']):
+    
+ 
+    for processo in psutil.process_iter(['pid', 'name', 'cpu_percent']):
         try:
-            cpu_percent = processo.cpu_percent()
-            if cpu_percent > cpu_max:
+            cpu_percent = processo.info['cpu_percent']
+            
+            if cpu_percent is not None and cpu_percent > cpu_max:
                 cpu_max = cpu_percent
                 processo_daVez = f"{processo.info['name']} (PID: {processo.info['pid']}) - {cpu_percent}%"
-        except ():
-            print("não pegou o processo")
+        
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
             
     return processo_daVez
 
@@ -166,10 +163,12 @@ def print_barra(Componente, nomeComponente, metrica, limite_barra, numDivisao):
 
 nome_servidor = psutil.users()[0].name
 memoria_total = round(conversao_gb(psutil.virtual_memory().total),2)
-
+data_arquivo = datetime.now().strftime("%d-%m-%Y")
 
 print(f"HORÁRIO AGORA = {datetime.now().strftime("%d/%m/%Y %H:%M")}")
 print(pyfiglet.figlet_format("n0Broke-Script"))
+
+NAME_CSV = f"Raw_{nome_servidor}-{data_arquivo}.csv"
 
 for i in range(1, 41):
 

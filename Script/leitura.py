@@ -4,6 +4,14 @@ import requests
 import json
 import time
 from io import StringIO
+import mysql.connector
+
+config = {
+    'user':"root",
+    'password':"" ,
+    'host':"localhost",
+    'database':"noBroke" 
+}
 
 NAME_BUCKET = 's3-bucket-projeto-unico' #Vamos mudar pra um nome do projeto
 RAW_WAY = 'RAW/Raw.csv'#caminho do raw.csv
@@ -18,18 +26,47 @@ s3_client = boto3.client(
     #!!!!!!!!!!!!!ATENÇÃO!!!!!!!!!!!!!!
     # NÃO COMITE AS CREDENDIACIS DA AWS
 )
+def buscar_limites(nome_servidor):
+    try:
+        conn = mysql.connector.connect(**config)
+        cursor = conn.cursor(dictionary=True)
 
+        query = """
+            SELECT tipo.nome_componente, tipo.valor_max_critico, tipo.valor_max_atencao
+            FROM tipo_componente tipo
+            JOIN servidor ON tipo.fk_servidor = servidor.id_servidor
+            WHERE servidor.nome = %s;
+        """
+        cursor.execute(query, (nome_servidor,))
+        resultados = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        return resultados
+    except:
+        print("Erro ao consultar banco de dados")
+        return []
 
 def ETL():
     try:
         print("(EXTRACT) Coletando dados brutos do diretório 'raw'")
         read_raw = s3_client.get_object(Bucket=NAME_BUCKET, Key=RAW_WAY)
         df_raw = pd.read_csv(read_raw['Body'], sep=';')
-         
+        #=============================TESTE BANCO DE DADOS=========================================
+        nome_do_servidor = df_raw['home_broker'].iloc[0]
+        print(f"Pesquisando limites para o servidor: {nome_do_servidor}")
+
+        limites = buscar_limites(nome_do_servidor)
+
+        for limite in limites:
+            print(f"Componente: {limite['nome_componente']} | Crítico: {limite['valor_max_critico']} | Atenção: {limite['valor_max_atencao']}")
+
+        #===========================================================================================
         print("(TRANSFORM) Removendo cópias")
         df_trusted = df_raw.drop_duplicates()
         print("(TRANSFORM) Removendo valores iguais a 0")
-        df_trusted = df_trusted.replace(0, '')
+        colunas_numericas = df_trusted.select_dtypes(include=['number']).columns
+        df_trusted[colunas_numericas] = df_trusted[colunas_numericas].replace(0, '')
         print("(TRANSFORM) Removendo valores nulos")
         df_trusted = df_trusted.dropna()
 
@@ -54,7 +91,9 @@ def ETL():
         with open('client.json', 'w') as f:
             json.dump(dados_json, f, indent=4, default=str)
             print("(LOADING) Enviando o Json pro bucket")
-            s3_client.put_object(Body='client.json',Bucket=NAME_BUCKET, Key='CLIENT/client.json')
+        with open('client.json', 'rb') as f:
+            s3_client.put_object(Bucket=NAME_BUCKET,Key='CLIENT/client.json',Body=f,ContentType='application/json')
+        print("(LOADING) JSON enviado para o bucket com sucesso.")
 
 
         # Transforma os dados em JSON em formata de dicionário 
@@ -80,7 +119,4 @@ def Salvar_s3(df, Key): # nome do data frame/ dados e caminho no bucket
     print(f"Arquivo salvo: {Key}")
 
 if __name__ == "__main__":
-
-    while True:
-        ETL()
-        time.sleep(15)
+    ETL()
