@@ -16,7 +16,7 @@ NAME_BUCKET = 's3-bucket-projeto-unico'#Vamos mudar pra um nome do projeto
 
 s3_client = boto3.client(
     's3',
-    #COLOCAR AS CREDENCIAIS AQUI, 
+   #COLOCAR AS CREDENCIAIS AQUI, 
     #!!!!!!!!!!!!!ATENÇÃO!!!!!!!!!!!!!!
     # NÃO COMITE AS CREDENDIACIS DA AWS
 )
@@ -35,7 +35,7 @@ resultados = {
     "swap_used_gb": [],
     "swap_free_gb": [],
     "disk_percent": [],
-    "disco_throughput": [], #quantidade de dados transferidos por segundo
+    "disco_taxa_transferencia": [], #quantidade de dados transferidos por segundo
     "latencia_resposta_ms":[],
     "net_bytes_sent_gb":[],
     "net_bytes_recv_gb":[],
@@ -96,7 +96,7 @@ def coletar_disk_free_gb():
     disco = psutil.disk_usage('/')
     return round(conversao_gb(disco.free),2)
 
-def coletar_throughput():
+def coletar_taxa_transferencia():
     disco = []
     disco.append(psutil.disk_io_counters())
     time.sleep(1)
@@ -104,8 +104,8 @@ def coletar_throughput():
 
     read_disco = disco[1].read_bytes - disco[0].read_bytes
     write_disco = disco[1].write_bytes - disco[0].write_bytes
-    throughput = round(conversao_mb(read_disco+write_disco),2)
-    return (throughput)
+    taxa_transferencia = round(conversao_mb(read_disco+write_disco),2)
+    return (taxa_transferencia)
 
 def coletar_net_packets_sent():
     rede = psutil.net_io_counters()
@@ -119,23 +119,23 @@ def coletar_total_processos():
     return round(len(psutil.pids()),2)
 
 def coletar_latencia_resposta_ms():
-        #https://www.fromdev.com/2024/10/how-to-use-python-subprocess-ping-with-ip-addresses-and-servers.html
-        # como usar a biblioteca "subprocess" e pegar o ping em ms
-        param = "-n" if platform.system().lower() == "windows" else "-c" # Verifica o sistema operacional do computador
-        resultado = subprocess.run(
-            ["ping", param, "1", "127.0.0.1"],
-            capture_output=True, # faz o resultado ser capturado no .stdout da linha 243
-            text=True, # transforma em String ao invés de byte
+    param = "-n" if platform.system().lower() == "windows" else "-c" # Verifica o sistema operacional do
+    resultado = subprocess.run(
+        ["ping", param, "1", "104.18.43.121"],
+        capture_output=True, # faz o resultado ser capturado no .stdout da linha 243
+        text=True, # transforma em String ao invés de byte
         )
-        linhas = resultado.stdout.split("\n")
-        for linha in linhas:
-            if "time=" in linha:
-                tempo_str = linha.split("time=")[1].split(" ")[0]
-                return round(float(tempo_str), 2)
-            elif "tempo=" in linha:
-                tempo_str = linha.split("tempo=")[1].split("ms")[0].strip()
-                return round(float(tempo_str), 2)
-        return 0.0
+    linhas = resultado.stdout.lower().replace("<", "=")
+    linhas = linhas.split("\n")
+    for linha in linhas:
+           if "tempo=" in linha or "time=" in linha:
+                chave = "tempo=" if "tempo=" in linha else "time="
+                parte_valor = linha.split(chave)[1]
+           
+                valor_final = parte_valor.split("ms")[0].strip().split(" ")[0].replace(",", ".")
+               
+                return round(float(valor_final), 2)
+    return 0.0
 
 def pid_consumindo_mais():
     processo_daVez = "Nenhum"
@@ -185,7 +185,7 @@ for i in range(1, 41):
     swap_used = coletar_swap_used_gb()
     swap_free = coletar_swap_free_gb()
     disk_percent = coletar_disk_percent()
-    disco_throughput = coletar_throughput()
+    disco_taxa_transferencia = coletar_taxa_transferencia()
     latencia_resposta = coletar_latencia_resposta_ms()
     net_bytes_sent = coletar_net_packets_sent()
     net_bytes_recv = coletar_net_packets_recv()
@@ -206,7 +206,7 @@ for i in range(1, 41):
     resultados["swap_used_gb"].append(swap_used)
     resultados["swap_free_gb"].append(swap_free)
     resultados["disk_percent"].append(disk_percent)
-    resultados["disco_throughput"].append(disco_throughput)
+    resultados["disco_taxa_transferencia"].append(disco_taxa_transferencia)
     resultados["latencia_resposta_ms"].append(latencia_resposta)
     resultados["net_bytes_sent_gb"].append(net_bytes_sent)
     resultados["net_bytes_recv_gb"].append(net_bytes_recv)
@@ -232,7 +232,7 @@ for i in range(1, 41):
 
                 !--------DADOS DO DISCO---------!
                 {print_barra(resultados['disk_percent'][len(resultados['disk_percent'])-1], "Uso Disco Total", "%", 10, 100)}
-                {print_barra(resultados['disco_throughput'][len(resultados['disco_throughput'])-1], "Throughput do Disco", "MB/s", 10, 500)}   
+                {print_barra(resultados['disco_taxa_transferencia'][len(resultados['disco_taxa_transferencia'])-1], "taxa_transferencia do Disco", "MB/s", 10, 500)}   
                 {print_barra(resultados['latencia_resposta_ms'][len(resultados['latencia_resposta_ms'])-1], "Latência de Resposta", "ms", 10, 1000)}
                 {print_barra(resultados['net_bytes_sent_gb'][len(resultados['net_bytes_sent_gb'])-1], "Bytes Enviados", "GB", 10, 100)}
                 {print_barra(resultados['net_bytes_recv_gb'][len(resultados['net_bytes_recv_gb'])-1], "Bytes Recebidos", "GB", 10, 100)}
