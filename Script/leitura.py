@@ -34,8 +34,6 @@ def buscar_medidas(nome_servidor):
         query = """
             SELECT 
                 tipo.nome_componente, 
-                tipo.valor_max_critico, 
-                tipo.valor_max_atencao,
                 formato.unidade_medida 
             FROM tipo_componente tipo
             JOIN servidor ON tipo.fk_servidor = servidor.id_servidor
@@ -73,14 +71,26 @@ def ETL():
         print("(TRANSFORM) Removendo cópias")
         df_trusted = df_trusted.drop_duplicates()
 
-        df_trusted = df_trusted.dropna(how='all')
         print("(TRANSFORM) Removendo valores iguais a 0")
         colunas_numericas = df_trusted.select_dtypes(include=['number']).columns
         for i in colunas_numericas:
             df_trusted[i] = df_trusted[i].replace(0, None)
         
+        mudar_medidas = buscar_medidas(nome_do_servidor)
 
+        
+        for medida in mudar_medidas:
+            nome_coluna = medida['nome_componente']
+            unidade = medida['unidade_medida']
 
+            if nome_coluna in df_trusted.columns:
+                df_trusted[nome_coluna] = pd.to_numeric(df_trusted[nome_coluna], errors='coerce')
+                df_trusted[nome_coluna] = df_trusted[nome_coluna].fillna(0)
+
+                if unidade == 'MB' or unidade == 'MB/s':
+                    df_trusted[nome_coluna] = round(df_trusted[nome_coluna] * 1024, 2)
+                elif unidade == 'GHz':
+                    df_trusted[nome_coluna] = round(df_trusted[nome_coluna] / 1000, 2)
 
         # Salva no diretório trusted
         pd.DataFrame(df_trusted).to_csv("trusted.csv", encoding="utf-8", sep=";", index=False)

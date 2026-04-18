@@ -16,7 +16,7 @@ NAME_BUCKET = 's3-bucket-projeto-unico'#Vamos mudar pra um nome do projeto
 
 s3_client = boto3.client(
     's3',
-   #COLOCAR AS CREDENCIAIS AQUI, 
+      #COLOCAR AS CREDENCIAIS AQUI, 
     #!!!!!!!!!!!!!ATENÇÃO!!!!!!!!!!!!!!
     # NÃO COMITE AS CREDENDIACIS DA AWS
 )
