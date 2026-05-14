@@ -193,23 +193,52 @@ def coletar_latencia_resposta_ms():
 
     return 0.0
 
+# Função pra achar o programa que tá usando mais CPU agora.
+# Resolve o problema de pegar 0% ou pegar o processo fantasma do sistema (Idle)
 def pid_consumindo_mais():
-    processo_daVez = "Nenhum"
+    processo_maisConsome = "Nenhum"
     cpu_max = -1
-    
- 
-    for processo in psutil.process_iter(['pid', 'name', 'cpu_percent']):
+
+    # Lista de Todos os Processos
+    processos = []
+    for proc in psutil.process_iter(['pid', 'name']):
         try:
-            cpu_percent = processo.info['cpu_percent']
-            
-            if cpu_percent is not None and cpu_percent > cpu_max:
-                cpu_max = cpu_percent
-                processo_daVez = f"{processo.info['name']} (PID: {processo.info['pid']}) - {cpu_percent}%"
-        
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            # No psutil, a primeira vez que tu pede a CPU de um processo ele SEMPRE devolve 0.0
+            # Ele precisa dessa primeira chamada pra criar um ponto de partida (baseline)
+            proc.cpu_percent(None)
+            processos.append(proc)  # Add na lista pra verificar jajá
+        except:
+            # Se o processo fechar do nada ou der acesso negado, ignora e segue a vida
             continue
-            
-    return processo_daVez
+
+    # Tempo (100 milissegundos) pro PC rodar as coisas
+    # Sem essa pausa, a diferença de tempo seria zero e ia dar 0% de novo
+    time.sleep(0.1)
+
+    # PASSO 3: Passa na lista de novo pegando a porcentagem VERDADEIRA agora que passou um tempo
+    for proc in processos:
+        try:
+            # Segunda chamada: agora sim ele calcula o quanto consumiu naqueles 0.1 segundos
+            cpu = proc.cpu_percent(None)
+
+            # proc.pid == 0: Ignora a Ociosidade do Sistema.
+            # No Windows/Linux, o PID 0 representa a CPU que NÃO tá sendo usada.
+            # Se tu não pular ele, o sistema ocioso sempre ganha como "maior consumidor".
+            # cpu <= 0: Pula também quem não tá consumindo nada.
+            if proc.pid == 0 or cpu <= 0:
+                continue
+
+            # Se esse cara consumiu mais que o antigo vencedor, toma o trono
+            if cpu > cpu_max:
+                cpu_max = cpu
+                processo_maisConsome = (
+                    f"{proc.info['name']} (PID: {proc.pid}) - {cpu}%"
+                )
+        except:
+            continue
+
+    # Retorna a string bonita pronta pra ir pro Banco/S3
+    return processo_maisConsome
 
 def print_barra(Componente, nomeComponente, metrica, limite_barra, numDivisao):
     calculo_total_barras = int(limite_barra * (Componente/numDivisao))
