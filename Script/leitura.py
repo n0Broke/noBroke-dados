@@ -8,6 +8,8 @@ import mysql.connector # Conexão com MySQL
 import credenciais # Importa os dados do arquivo python (coloca as credencias da sua aws LÁ IMEDIATAMENTE)
 from botocore.exceptions import ClientError, EndpointConnectionError
 
+# ANTEÇÃO: LINHA 174  É ONDE VOCÊ VAI COLOCAR OS ARQUIVOS SEPARADOS, MODIFIQUE LÁ
+
 # Configurações pra se conectar com banco de Dados (credenciais aqui)
 config = {
     'user':"root",
@@ -168,6 +170,15 @@ def ETL():
             json.dump(dados_json, f, indent=4, default=str)
             # indent=4: JSON formatado (bonito)
             # default=str: converte tipos especiais (datetime) para string
+
+            # ===============================================================
+            # Aqui você coloca o seu código que vai criar o arquivo separado
+            # Arquivos do individuais no caso
+
+
+
+            # ===============================================================
+
 
         print("(LOADING) Enviando o Json pro bucket")
 
