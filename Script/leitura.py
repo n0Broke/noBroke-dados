@@ -208,6 +208,15 @@ def ETL():
 
             df_client = df_trusted.copy()
 
+            pd.DataFrame(df_trusted_isabela).to_csv(
+            "isa.csv",
+            encoding="utf-8",
+            sep=";",
+            index=False
+            )
+
+            Salvar_s3(df_trusted_isabela, "TRUSTED/isa.csv")
+
             def porcentagem(parte, total):
                 if total == 0:
                     return 0
@@ -252,6 +261,19 @@ def ETL():
             df_client["contador_5xx"] = contador_5xx_atual
             df_client["porcentagem_5xx"] = porcentagem_5xx_atual
             df_client["variacao_5xx"] = variacao_5xx
+
+            dados_isabela_json = df_client.to_dict(orient="records")
+
+            with open("isa.json", "w", encoding="utf-8") as f:
+                json.dump(dados_isabela_json, f, indent=4, default=str)
+
+            with open("isa.json", "rb") as f:
+                s3_client.put_object(
+                Bucket='s3-bucket-projeto-unico',
+                Key="CLIENT/isa.json",
+                Body=f,
+                ContentType="application/json"
+            )
 
             #Fim isa individual
 
