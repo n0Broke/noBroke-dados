@@ -10,10 +10,175 @@ import mysql.connector
 import subprocess
 import platform
 import credenciais # Importa os dados do arquivo python (coloca as credencias da sua aws LÁ IMEDIATAMENTE)
+import random
+import subprocess
+import re
+
+requisicoes = {
+
+    "login": [
+        {
+            "metodo": "POST",
+            "endpoint": "/api/auth/login",
+            "status_code": random.choice([200, 500, 501, 502, 503, 504, 505]),
+            "latencia_ms": random.choice([120, 800, 1200, 2500, 4000])
+        },
+        {
+            "metodo": "POST",
+            "endpoint": "/api/auth/logout",
+            "status_code": random.choice([200, 500, 503, 504]),
+            "latencia_ms": random.choice([80, 600, 1800, 3200])
+        },
+        {
+            "metodo": "POST",
+            "endpoint": "/api/auth/refresh-token",
+            "status_code": random.choice([200, 500, 502, 504]),
+            "latencia_ms": random.choice([60, 500, 2000, 3500])
+        },
+        {
+            "metodo": "POST",
+            "endpoint": "/api/auth/2fa/verify",
+            "status_code": random.choice([200, 401, 500, 503]),
+            "latencia_ms": random.choice([150, 900, 2200])
+        }
+    ],
+
+    "mercado": [
+        {
+            "metodo": "GET",
+            "endpoint": "/api/quotes/PETR4",
+            "status_code": random.choice([200, 500, 502, 504]),
+            "latencia_ms": random.choice([35, 400, 1400, 3000])
+        },
+        {
+            "metodo": "GET",
+            "endpoint": "/api/quotes/VALE3",
+            "status_code": random.choice([200, 500, 503]),
+            "latencia_ms": random.choice([32, 350, 2500])
+        },
+        {
+            "metodo": "GET",
+            "endpoint": "/api/market/orderbook/PETR4",
+            "status_code": random.choice([200, 500, 502, 503, 504, 505]),
+            "latencia_ms": random.choice([90, 1200, 3200, 5000])
+        },
+        {
+            "metodo": "GET",
+            "endpoint": "/api/market/news",
+            "status_code": random.choice([200, 500, 503]),
+            "latencia_ms": random.choice([90, 700, 2100])
+        }
+    ],
+
+    "carteira": [
+        {
+            "metodo": "GET",
+            "endpoint": "/api/portfolio",
+            "status_code": random.choice([200, 500, 503, 504]),
+            "latencia_ms": random.choice([50, 600, 1900, 3400])
+        },
+        {
+            "metodo": "GET",
+            "endpoint": "/api/portfolio/performance",
+            "status_code": random.choice([200, 500, 504]),
+            "latencia_ms": random.choice([70, 850, 2800])
+        }
+    ],
+
+    "financeiro": [
+        {
+            "metodo": "GET",
+            "endpoint": "/api/account/balance",
+            "status_code": random.choice([200, 500, 503]),
+            "latencia_ms": random.choice([45, 500, 2300])
+        },
+        {
+            "metodo": "POST",
+            "endpoint": "/api/deposits",
+            "status_code": random.choice([201, 500, 502, 504]),
+            "latencia_ms": random.choice([180, 1200, 2600, 4200])
+        }
+    ],
+
+    "orders": [
+        {
+            "metodo": "POST",
+            "endpoint": "/api/orders/buy",
+            "status_code": random.choice([201, 500, 502, 503, 504]),
+            "latencia_ms": random.choice([210, 1300, 2800, 4500])
+        },
+        {
+            "metodo": "POST",
+            "endpoint": "/api/orders/sell",
+            "status_code": random.choice([201, 500, 501, 503, 504, 505]),
+            "latencia_ms": random.choice([250, 1600, 3200, 5000])
+        },
+        {
+            "metodo": "DELETE",
+            "endpoint": "/api/orders/cancel",
+            "status_code": random.choice([200, 500, 503, 504]),
+            "latencia_ms": random.choice([160, 1000, 2600])
+        }
+    ],
+
+    "trades": [
+        {
+            "metodo": "GET",
+            "endpoint": "/api/trades",
+            "status_code": random.choice([200, 500, 503]),
+            "latencia_ms": random.choice([95, 700, 2400])
+        },
+        {
+            "metodo": "GET",
+            "endpoint": "/api/trades/summary",
+            "status_code": random.choice([200, 500, 502, 504]),
+            "latencia_ms": random.choice([110, 950, 3100])
+        }
+    ],
+
+    "validacao_ordens": [
+        {
+            "metodo": "POST",
+            "endpoint": "/api/order-preview",
+            "status_code": random.choice([200, 422, 500, 503]),
+            "latencia_ms": random.choice([140, 800, 2200])
+        },
+        {
+            "metodo": "POST",
+            "endpoint": "/api/orders/validate",
+            "status_code": random.choice([200, 422, 500, 504]),
+            "latencia_ms": random.choice([170, 1200, 3000])
+        }
+    ],
+
+    "risk_check": [
+        {
+            "metodo": "POST",
+            "endpoint": "/api/risk/check",
+            "status_code": random.choice([200, 500, 503, 504]),
+            "latencia_ms": random.choice([130, 700, 2600, 4100])
+        }
+    ],
+
+    "b3": [
+        {
+            "metodo": "POST",
+            "endpoint": "/api/b3/orders",
+            "status_code": random.choice([200, 500, 501, 502, 503, 504, 505]),
+            "latencia_ms": random.choice([400, 1800, 3500, 6000])
+        },
+        {
+            "metodo": "GET",
+            "endpoint": "/api/b3/session-status",
+            "status_code": random.choice([200, 500, 503, 504]),
+            "latencia_ms": random.choice([85, 600, 2400])
+        }
+    ]
+}
 
 config = {
     'user': "root",
-    'password': "#Rich130407",
+    'password': "Mywtty135790",
     'host': "localhost",
     'database': "noBroke" 
 }
@@ -50,8 +215,22 @@ resultados = {
     "net_bytes_sent_gb":[],
     "net_bytes_recv_gb":[],
     "total_processos":[],
-    "processo_maior_consumo":[]
+    "processo_maior_consumo":[],
+    "metodo": [],
+    "endpoint": [],
+    "status_code": [],
+    "latencia_ms": []
 }
+
+def GerarRequisicao():
+    lista_requisicoes_feitas = []
+
+    for i in range(10):
+        categoria = random.choice(list(requisicoes.keys()))
+        requisicao = random.choice(requisicoes[categoria])
+        lista_requisicoes_feitas.append(requisicao)
+
+    return lista_requisicoes_feitas
 
 def buscar_idServidor(nome_servidor):
     try:
@@ -246,6 +425,8 @@ def print_barra(Componente, nomeComponente, metrica, limite_barra, numDivisao):
 
 
 
+
+
 nome_servidor = "luiz"
 id_servidor = buscar_idServidor(nome_servidor)
 
@@ -286,27 +467,34 @@ for i in range(1, 41):
     net_bytes_recv = coletar_net_packets_recv()
     total_processos = coletar_total_processos()
     pid_mais_consumista = pid_consumindo_mais()
+    requisicoes_geradas = GerarRequisicao()
 
-    resultados["id_servidor"].append(id_servidor)
-    resultados["home_broker"].append(nome_servidor)
-    resultados["timestamp"].append(horario_tratado)
-    resultados["cpu_percent"].append(cpu_porcentagem)
-    resultados["cpu_freq_current"].append(cpu_frequencia_atual)
-    resultados["cpu_time_idle"].append(cpu_tempo_ocioso)
-    resultados["ram_total_gb"].append(ram_total)
-    resultados["ram_available_gb"].append(ram_available)
-    resultados["ram_used_gb"].append(ram_used)
-    resultados["ram_percent"].append(ram_percent)
-    resultados["swap_percent"].append(swap_percent)
-    resultados["swap_used_gb"].append(swap_used)
-    resultados["swap_free_gb"].append(swap_free)
-    resultados["disk_percent"].append(disk_percent)
-    resultados["disco_taxa_transferencia"].append(disco_taxa_transferencia)
-    resultados["latencia_resposta_ms"].append(latencia_resposta)
-    resultados["net_bytes_sent_gb"].append(net_bytes_sent)
-    resultados["net_bytes_recv_gb"].append(net_bytes_recv)
-    resultados["total_processos"].append(total_processos)
-    resultados["processo_maior_consumo"].append(pid_mais_consumista)
+    for requisicao in requisicoes_geradas:
+
+        resultados["id_servidor"].append(id_servidor)
+        resultados["home_broker"].append(nome_servidor)
+        resultados["timestamp"].append(horario_tratado)
+        resultados["cpu_percent"].append(cpu_porcentagem)
+        resultados["cpu_freq_current"].append(cpu_frequencia_atual)
+        resultados["cpu_time_idle"].append(cpu_tempo_ocioso)
+        resultados["ram_total_gb"].append(ram_total)
+        resultados["ram_available_gb"].append(ram_available)
+        resultados["ram_used_gb"].append(ram_used)
+        resultados["ram_percent"].append(ram_percent)
+        resultados["swap_percent"].append(swap_percent)
+        resultados["swap_used_gb"].append(swap_used)
+        resultados["swap_free_gb"].append(swap_free)
+        resultados["disk_percent"].append(disk_percent)
+        resultados["disco_taxa_transferencia"].append(disco_taxa_transferencia)
+        resultados["latencia_resposta_ms"].append(latencia_resposta)
+        resultados["net_bytes_sent_gb"].append(net_bytes_sent)
+        resultados["net_bytes_recv_gb"].append(net_bytes_recv)
+        resultados["total_processos"].append(total_processos)
+        resultados["processo_maior_consumo"].append(pid_mais_consumista)
+        resultados["metodo"].append(requisicao["metodo"])
+        resultados["endpoint"].append(requisicao["endpoint"])
+        resultados["status_code"].append(requisicao["status_code"])
+        resultados["latencia_ms"].append(requisicao["latencia_ms"])
 
     print(f"""
           +------------------------------------------------------------------------------+

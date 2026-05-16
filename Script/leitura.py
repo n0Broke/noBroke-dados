@@ -7,6 +7,9 @@ from io import StringIO # Ler arquivos em memória sem precisar criar arquivo no
 import mysql.connector # Conexão com MySQL
 import credenciais # Importa os dados do arquivo python (coloca as credencias da sua aws LÁ IMEDIATAMENTE)
 from botocore.exceptions import ClientError, EndpointConnectionError
+from datetime import datetime, timedelta
+import time
+import numpy as np
 
 # ANTEÇÃO: LINHA 174  É ONDE VOCÊ VAI COLOCAR OS ARQUIVOS SEPARADOS, MODIFIQUE LÁ
 
@@ -82,7 +85,7 @@ def ETL():
         # Trata essa lista, criando outra com agora só arquivos que terminam com .csv
         csv = [obj['Key'] for obj in listar_csv_raw.get('Contents', []) if obj['Key'].endswith('.csv')]
         
-        # Cria uma lista que vai armaazenar os csv
+        # Cria uma lista que vai armazenar os csv
         lista_csv = []
         # Verifica agora cada arquivos csv
         for i in csv:
@@ -175,6 +178,82 @@ def ETL():
             # Aqui você coloca o seu código que vai criar o arquivo separado
             # Arquivos do individuais no caso
 
+            #isa_individual
+
+            def classificar_categoria(endpoint):
+                if "account" in endpoint:
+                    return "financeiro"
+                elif "orders" in endpoint:
+                    return "ordens"
+                elif "market" in endpoint:
+                    return "mercado"
+                elif "b3" in endpoint:
+                    return "b3"
+                else:
+                    return "trades"
+
+            df_trusted["categoria"] = df_trusted["endpoint"].apply(classificar_categoria)
+
+            def classificar_status(status_code):
+                if status_code < 200 or status_code > 599:
+                    return "status_code_invalido"
+                elif status_code <= 299:
+                    return "sucesso"
+                elif status_code <= 499:
+                    return "erro_cliente"
+                else:
+                    return "erro_servidor"
+
+            df_trusted["tipo_status"] = df_trusted["status_code"].apply(classificar_status)
+
+            df_client = df_trusted.copy()
+
+            def porcentagem(parte, total):
+                if total == 0:
+                    return 0
+                return round((parte / total) * 100, 2)
+
+            def variacao_percentual(atual, anterior):
+                if anterior == 0:
+                    return 0
+                return round(((atual - anterior) / anterior) * 100, 2)
+
+            df_client["timestamp"] = pd.to_datetime(df_client["timestamp"], dayfirst=True, errors="coerce")
+
+            agora = datetime.now()
+            inicio_atual = agora - timedelta(minutes=15)
+            inicio_anterior = agora - timedelta(minutes=30)
+
+            df_atual = df_client[df_client["timestamp"] >= inicio_atual]
+            df_anterior = df_client[(df_client["timestamp"] >= inicio_anterior) &(df_client["timestamp"] < inicio_atual)]
+
+            contador_atual = len(df_atual)
+            contador_anterior = len(df_anterior)
+
+            contador_sucesso_atual = len(df_atual[df_atual["tipo_status"] == "sucesso"])
+            contador_sucesso_anterior = len(df_anterior[df_anterior["tipo_status"] == "sucesso"])
+
+            contador_5xx_atual = len(df_atual[(df_atual["status_code"] >= 500) & (df_atual["status_code"] <= 507)])
+            contador_5xx_anterior = len(df_anterior[(df_anterior["status_code"] >= 500) & (df_anterior["status_code"] <= 507)])
+
+            porcentagem_volume = variacao_percentual(contador_atual, contador_anterior)
+
+            porcentagem_sucesso_atual = porcentagem(contador_sucesso_atual, contador_atual)
+            porcentagem_sucesso_anterior = porcentagem(contador_sucesso_anterior, contador_anterior)
+            variacao_sucesso = variacao_percentual(porcentagem_sucesso_atual, porcentagem_sucesso_anterior)
+
+            porcentagem_5xx_atual = porcentagem(contador_5xx_atual, contador_atual)
+            porcentagem_5xx_anterior = porcentagem(contador_5xx_anterior, contador_anterior)
+            variacao_5xx = variacao_percentual(porcentagem_5xx_atual, porcentagem_5xx_anterior)
+
+            df_client["porcentagem_volume"] = porcentagem_volume
+            df_client["porcentagem_sucesso"] = porcentagem_sucesso_atual
+            df_client["variacao_sucesso"] = variacao_sucesso
+            df_client["contador_5xx"] = contador_5xx_atual
+            df_client["porcentagem_5xx"] = porcentagem_5xx_atual
+            df_client["variacao_5xx"] = variacao_5xx
+
+            #Fim isa individual
 
 
             # ===============================================================
