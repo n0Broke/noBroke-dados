@@ -199,9 +199,8 @@ def ETL():
         colunas_remover = [
                 'cpu_percent', 'cpu_freq_current', 'cpu_time_idle', 
                 'ram_total_gb', 'ram_available_gb', 'ram_used_gb', 'ram_percent', 
-                'swap_percent', 'swap_used_gb', 'swap_free_gb', 'disk_percent', 
-                'disco_taxa_transferencia', 'latencia_resposta_ms', 
-                'net_bytes_sent_gb', 'net_bytes_recv_gb', 'total_processos','processo_maior_consumo'
+                'swap_percent', 'swap_used_gb', 'swap_free_gb', 'disk_percent', 'latencia_resposta_ms',
+                'disco_taxa_transferencia','net_bytes_sent_gb', 'net_bytes_recv_gb', 'total_processos','processo_maior_consumo'
             ]
         
         df_trusted_isabela = df_trusted_isabela.drop(columns=colunas_remover, errors='ignore')
@@ -210,7 +209,8 @@ def ETL():
 
         pd.DataFrame(df_trusted_isabela).to_csv("isa_trusted.csv", encoding="utf-8", sep=";", index=False)
         print("Consegui acessar o classifica_categoria")
-        
+
+
         df_trusted_isabela["tipo_status"] = df_trusted_isabela["status_code"].fillna(0).astype(int).apply(classificar_status)
 
         Salvar_s3(df_trusted_isabela, "TRUSTED/isa.csv")
@@ -223,14 +223,21 @@ def ETL():
         inicio_atual = agora - timedelta(minutes=15)
         inicio_anterior = agora - timedelta(minutes=30)
 
+
         df_atual = df_client_isabela[df_client_isabela["timestamp"] >= inicio_atual]
         df_anterior = df_client_isabela[(df_client_isabela["timestamp"] >= inicio_anterior) &(df_client_isabela["timestamp"] < inicio_atual)]
 
+
+        contador_ordens = (df_client_isabela["categoria"] == "ordens").sum()
+
+        contador_volume = len(df_client_isabela)
         contador_atual = len(df_atual)
         contador_anterior = len(df_anterior)
 
-        contador_sucesso_atual = len(df_atual[df_atual["tipo_status"] == "sucesso"])
+        contador_sucesso_atual = len(df_atual[(df_atual["categoria"] == "ordens") & (df_atual["tipo_status"] == "sucesso")])
         contador_sucesso_anterior = len(df_anterior[df_anterior["tipo_status"] == "sucesso"])
+        
+        contador_5xx = len(df_client_isabela[(df_client_isabela["status_code"] >= 500) & (df_client_isabela["status_code"] <= 507)])
 
         contador_5xx_atual = len(df_atual[(df_atual["status_code"] >= 500) & (df_atual["status_code"] <= 507)])
         contador_5xx_anterior = len(df_anterior[(df_anterior["status_code"] >= 500) & (df_anterior["status_code"] <= 507)])
@@ -245,11 +252,48 @@ def ETL():
         porcentagem_5xx_anterior = porcentagem(contador_5xx_anterior, contador_anterior)
         variacao_5xx = variacao_percentual(porcentagem_5xx_atual, porcentagem_5xx_anterior)
 
-        df_client_isabela["porcentagem_volume"] = porcentagem_volume
-        df_client_isabela["porcentagem_sucesso"] = porcentagem_sucesso_atual
+        latencias_atuais = df_atual[df_atual["categoria"] == "ordens"]["latencia_ms"].dropna().tolist()
+
+        latencias_anteriores = df_anterior[df_anterior["categoria"] == "ordens"]["latencia_ms"].dropna().tolist()
+
+        if len(latencias_atuais) > 0:
+            p95_atual = np.percentile(latencias_atuais, 95)
+        else:
+            p95_atual = 0
+
+        if len(latencias_anteriores) > 0:
+            p95_anterior = np.percentile(latencias_anteriores, 95)
+        else:
+            p95_anterior = 0
+
+        variacao_p95 = variacao_percentual(
+        p95_atual,
+        p95_anterior)
+        
+        porcentagem_ordens = porcentagem(contador_ordens, contador_volume)
+
+        total_sucesso_ordens = len(
+        df_client_isabela[(df_client_isabela["categoria"] == "ordens") & (df_client_isabela["tipo_status"] == "sucesso")])
+
+        porcentagem_sucesso_ordens = porcentagem(total_sucesso_ordens,contador_ordens)
+
+        latencias_ordens = df_client_isabela[df_client_isabela["categoria"] == "ordens"]["latencia_ms"].dropna().tolist()
+
+        if len(latencias_ordens) > 0:
+            latencia_p95_ordens = round(np.percentile(latencias_ordens, 95), 2)
+        else:
+            latencia_p95_ordens = 0
+
+        df_client_isabela["total_ordens"] = contador_ordens
+        df_client_isabela["total_sucesso_ordens"] = total_sucesso_ordens
+        df_client_isabela["porcentagem_sucesso_ordens"] = porcentagem_sucesso_ordens
+        df_client_isabela["latencia_p95_ordens"] = latencia_p95_ordens
+        df_client_isabela["variacao_latencia_p95"] = variacao_p95
+        df_client_isabela["porcentagem_ordens"] = porcentagem_ordens
+        df_client_isabela["total_volume"] = contador_volume
+        df_client_isabela["variacao_volume"] = porcentagem_volume
         df_client_isabela["variacao_sucesso"] = variacao_sucesso
-        df_client_isabela["contador_5xx"] = contador_5xx_atual
-        df_client_isabela["porcentagem_5xx"] = porcentagem_5xx_atual
+        df_client_isabela["contador_5xx"] = contador_5xx
         df_client_isabela["variacao_5xx"] = variacao_5xx
 
         df_client_isabela = df_client_isabela.astype(object).where(pd.notnull(df_client_isabela), None)
