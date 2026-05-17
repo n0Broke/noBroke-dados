@@ -16,7 +16,7 @@ import numpy as np
 # Configurações pra se conectar com banco de Dados (credenciais aqui)
 config = {
     'user':"root",
-    'password':"#Rich130407",
+    'password':"pepe@2011",
     'host':"localhost",
     'database':"noBroke" 
 }
@@ -168,118 +168,14 @@ def ETL():
         # Converte DataFrame para Dicionário e salva como JSON formatado
         dados_json = df_client.to_dict(orient='records')
 
+
+        
+
         # Salva no Note local (para debug/backup ou revisão)
         with open('client.json', 'w') as f:
             json.dump(dados_json, f, indent=4, default=str)
             # indent=4: JSON formatado (bonito)
             # default=str: converte tipos especiais (datetime) para string
-
-            # ===============================================================
-            # Aqui você coloca o seu código que vai criar o arquivo separado
-            # Arquivos do individuais no caso
-
-            #isa_individual
-
-            def classificar_categoria(endpoint):
-                if "account" in endpoint:
-                    return "financeiro"
-                elif "orders" in endpoint:
-                    return "ordens"
-                elif "market" in endpoint:
-                    return "mercado"
-                elif "b3" in endpoint:
-                    return "b3"
-                else:
-                    return "trades"
-
-            df_trusted["categoria"] = df_trusted["endpoint"].apply(classificar_categoria)
-
-            def classificar_status(status_code):
-                if status_code < 200 or status_code > 599:
-                    return "status_code_invalido"
-                elif status_code <= 299:
-                    return "sucesso"
-                elif status_code <= 499:
-                    return "erro_cliente"
-                else:
-                    return "erro_servidor"
-
-            df_trusted["tipo_status"] = df_trusted["status_code"].apply(classificar_status)
-
-            df_client = df_trusted.copy()
-
-            pd.DataFrame(df_trusted_isabela).to_csv(
-            "isa.csv",
-            encoding="utf-8",
-            sep=";",
-            index=False
-            )
-
-            Salvar_s3(df_trusted_isabela, "TRUSTED/isa.csv")
-
-            def porcentagem(parte, total):
-                if total == 0:
-                    return 0
-                return round((parte / total) * 100, 2)
-
-            def variacao_percentual(atual, anterior):
-                if anterior == 0:
-                    return 0
-                return round(((atual - anterior) / anterior) * 100, 2)
-
-            df_client["timestamp"] = pd.to_datetime(df_client["timestamp"], dayfirst=True, errors="coerce")
-
-            agora = datetime.now()
-            inicio_atual = agora - timedelta(minutes=15)
-            inicio_anterior = agora - timedelta(minutes=30)
-
-            df_atual = df_client[df_client["timestamp"] >= inicio_atual]
-            df_anterior = df_client[(df_client["timestamp"] >= inicio_anterior) &(df_client["timestamp"] < inicio_atual)]
-
-            contador_atual = len(df_atual)
-            contador_anterior = len(df_anterior)
-
-            contador_sucesso_atual = len(df_atual[df_atual["tipo_status"] == "sucesso"])
-            contador_sucesso_anterior = len(df_anterior[df_anterior["tipo_status"] == "sucesso"])
-
-            contador_5xx_atual = len(df_atual[(df_atual["status_code"] >= 500) & (df_atual["status_code"] <= 507)])
-            contador_5xx_anterior = len(df_anterior[(df_anterior["status_code"] >= 500) & (df_anterior["status_code"] <= 507)])
-
-            porcentagem_volume = variacao_percentual(contador_atual, contador_anterior)
-
-            porcentagem_sucesso_atual = porcentagem(contador_sucesso_atual, contador_atual)
-            porcentagem_sucesso_anterior = porcentagem(contador_sucesso_anterior, contador_anterior)
-            variacao_sucesso = variacao_percentual(porcentagem_sucesso_atual, porcentagem_sucesso_anterior)
-
-            porcentagem_5xx_atual = porcentagem(contador_5xx_atual, contador_atual)
-            porcentagem_5xx_anterior = porcentagem(contador_5xx_anterior, contador_anterior)
-            variacao_5xx = variacao_percentual(porcentagem_5xx_atual, porcentagem_5xx_anterior)
-
-            df_client["porcentagem_volume"] = porcentagem_volume
-            df_client["porcentagem_sucesso"] = porcentagem_sucesso_atual
-            df_client["variacao_sucesso"] = variacao_sucesso
-            df_client["contador_5xx"] = contador_5xx_atual
-            df_client["porcentagem_5xx"] = porcentagem_5xx_atual
-            df_client["variacao_5xx"] = variacao_5xx
-
-            dados_isabela_json = df_client.to_dict(orient="records")
-
-            with open("isa.json", "w", encoding="utf-8") as f:
-                json.dump(dados_isabela_json, f, indent=4, default=str)
-
-            with open("isa.json", "rb") as f:
-                s3_client.put_object(
-                Bucket='s3-bucket-projeto-unico',
-                Key="CLIENT/isa.json",
-                Body=f,
-                ContentType="application/json"
-            )
-
-            #Fim isa individual
-
-
-            # ===============================================================
-
 
         print("(LOADING) Enviando o Json pro bucket")
 
@@ -291,6 +187,91 @@ def ETL():
                                  ContentType='application/json')
         print("JSON enviado para o bucket com sucesso.")
 
+            # ===============================================================
+            # Aqui você coloca o seu código que vai criar o arquivo separado
+            # Arquivos do individuais no caso
+
+            #isa_individual
+
+        print("Entregavel da Isa")
+        df_trusted_isabela = df_raw.copy()
+
+        colunas_remover = [
+                'cpu_percent', 'cpu_freq_current', 'cpu_time_idle', 
+                'ram_total_gb', 'ram_available_gb', 'ram_used_gb', 'ram_percent', 
+                'swap_percent', 'swap_used_gb', 'swap_free_gb', 'disk_percent', 
+                'disco_taxa_transferencia', 'latencia_resposta_ms', 
+                'net_bytes_sent_gb', 'net_bytes_recv_gb', 'total_processos','processo_maior_consumo'
+            ]
+        
+        df_trusted_isabela = df_trusted_isabela.drop(columns=colunas_remover, errors='ignore')
+
+        df_trusted_isabela["categoria"] = df_trusted_isabela["endpoint"].fillna("").apply(classificar_categoria)
+
+        pd.DataFrame(df_trusted_isabela).to_csv("isa_trusted.csv", encoding="utf-8", sep=";", index=False)
+        print("Consegui acessar o classifica_categoria")
+        
+        df_trusted_isabela["tipo_status"] = df_trusted_isabela["status_code"].fillna(0).astype(int).apply(classificar_status)
+
+        Salvar_s3(df_trusted_isabela, "TRUSTED/isa.csv")
+        print("Enviado para o bucket o trusted da isabela")
+
+        df_client_isabela = df_trusted_isabela.copy()
+        df_client_isabela["timestamp"] = pd.to_datetime(df_client_isabela["timestamp"], dayfirst=True, errors="coerce")
+        print("sei que vai dar errado")
+        agora = datetime.now()
+        inicio_atual = agora - timedelta(minutes=15)
+        inicio_anterior = agora - timedelta(minutes=30)
+
+        df_atual = df_client_isabela[df_client_isabela["timestamp"] >= inicio_atual]
+        df_anterior = df_client_isabela[(df_client_isabela["timestamp"] >= inicio_anterior) &(df_client_isabela["timestamp"] < inicio_atual)]
+
+        contador_atual = len(df_atual)
+        contador_anterior = len(df_anterior)
+
+        contador_sucesso_atual = len(df_atual[df_atual["tipo_status"] == "sucesso"])
+        contador_sucesso_anterior = len(df_anterior[df_anterior["tipo_status"] == "sucesso"])
+
+        contador_5xx_atual = len(df_atual[(df_atual["status_code"] >= 500) & (df_atual["status_code"] <= 507)])
+        contador_5xx_anterior = len(df_anterior[(df_anterior["status_code"] >= 500) & (df_anterior["status_code"] <= 507)])
+
+        porcentagem_volume = variacao_percentual(contador_atual, contador_anterior)
+
+        porcentagem_sucesso_atual = porcentagem(contador_sucesso_atual, contador_atual)
+        porcentagem_sucesso_anterior = porcentagem(contador_sucesso_anterior, contador_anterior)
+        variacao_sucesso = variacao_percentual(porcentagem_sucesso_atual, porcentagem_sucesso_anterior)
+
+        porcentagem_5xx_atual = porcentagem(contador_5xx_atual, contador_atual)
+        porcentagem_5xx_anterior = porcentagem(contador_5xx_anterior, contador_anterior)
+        variacao_5xx = variacao_percentual(porcentagem_5xx_atual, porcentagem_5xx_anterior)
+
+        df_client_isabela["porcentagem_volume"] = porcentagem_volume
+        df_client_isabela["porcentagem_sucesso"] = porcentagem_sucesso_atual
+        df_client_isabela["variacao_sucesso"] = variacao_sucesso
+        df_client_isabela["contador_5xx"] = contador_5xx_atual
+        df_client_isabela["porcentagem_5xx"] = porcentagem_5xx_atual
+        df_client_isabela["variacao_5xx"] = variacao_5xx
+
+        df_client_isabela = df_client_isabela.astype(object).where(pd.notnull(df_client_isabela), None)
+        
+        dados_isabela_json = df_client_isabela.to_dict(orient="records")
+
+        
+        with open("isa.json", "w", encoding="utf-8") as f:
+                json.dump(dados_isabela_json, f, indent=4, default=str)
+
+        with open("isa.json", "rb") as f:
+                s3_client.put_object(
+                Bucket='s3-bucket-projeto-unico',
+                Key="CLIENT/isa.json",
+                Body=f,
+                ContentType="application/json"
+            )
+
+            #Fim isa individual
+
+
+            # ===============================================================
 
     # Tratativas de Erro caso a AWS não funfe
     except EndpointConnectionError:
@@ -323,6 +304,39 @@ def Salvar_s3(df, Key): # nome do data frame/ dados e caminho no bucket
     df.to_csv(csv_buffer, index=False, sep=';')
     s3_client.put_object(Bucket=NOME_BUCKET, Key=Key, Body=csv_buffer.getvalue())
     print(f"Arquivo salvo no S3: {Key}")
+
+def classificar_categoria(endpoint):
+                if "account" in endpoint:
+                    return "financeiro"
+                elif "orders" in endpoint:
+                    return "ordens"
+                elif "market" in endpoint:
+                    return "mercado"
+                elif "b3" in endpoint:
+                    return "b3"
+                else:
+                    return "trades"
+
+
+def classificar_status(status_code):
+                if status_code < 200 or status_code > 599:
+                    return "status_code_invalido"
+                elif status_code <= 299:
+                    return "sucesso"
+                elif status_code <= 499:
+                    return "erro_cliente"
+                else:
+                    return "erro_servidor"
+
+def porcentagem(parte, total):
+                if total == 0:
+                    return 0
+                return round((parte / total) * 100, 2)
+
+def variacao_percentual(atual, anterior):
+                if anterior == 0:
+                    return 0
+                return round(((atual - anterior) / anterior) * 100, 2)
 
 # Agora vai iniciar a ETL
 if __name__ == "__main__":
