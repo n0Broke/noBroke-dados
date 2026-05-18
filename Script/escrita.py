@@ -178,7 +178,7 @@ requisicoes = {
 
 config = {
     'user': "root",
-    'password':"",
+    'password':"#Rich130407",
     'host': "localhost",
     'database': "noBroke" 
 }
@@ -186,7 +186,7 @@ config = {
 fuso_brasil = pytz.timezone('America/Sao_Paulo')
 
 
-NAME_BUCKET = 's3-bucket-projeto-unico'#Vamos mudar pra um nome do projeto
+NAME_BUCKET = 'teste-sprint-etl'#Vamos mudar pra um nome do projeto
 
 s3_client = boto3.client(
     's3',
@@ -427,7 +427,7 @@ def print_barra(Componente, nomeComponente, metrica, limite_barra, numDivisao):
 
 
 
-nome_servidor = "SRV-NOBROKE-PROXY"
+nome_servidor = "luiz"
 id_servidor = buscar_idServidor(nome_servidor)
 
 # Verificar se o id_Servidor existe

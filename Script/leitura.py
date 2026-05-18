@@ -16,16 +16,19 @@ import numpy as np
 # Configurações pra se conectar com banco de Dados (credenciais aqui)
 config = {
     'user':"root",
-    'password':"pepe@2011",
+    'password':"#Rich130407",
     'host':"localhost",
     'database':"noBroke" 
 }
 
-NOME_BUCKET = 's3-bucket-projeto-unico' # Nome do Bucket na sua S3
+NOME_BUCKET = 'teste-sprint-etl' # Nome do Bucket na sua S3
 RAW_CAMINHO = 'RAW/' # Caminho dentro do Bucket até a pasta da Camada 1
 TRUSTED_CAMINHO = 'TRUSTED/Trusted.csv' # Caminho pra criar o Arquivo Trusted (Camada 2)
 CLIENT_CAMINHO = 'CLIENT/Client.csv' # Caminho para criar o Arquivo Client (Camada 3)
 SITE_URL= '' #tem que subir na ec2 pra enviar o json, futuramente colocar a url do site aqui
+
+TRUSTED_RICHARD_CAMINHO = 'TRUSTED/richard.csv'
+CLIENT_RICHARD_CAMINHO = 'CLIENT/richard.json'
 
 # Credenciais da AWS (Só pegar na página quando tu liga a AWS)
 s3_client = boto3.client(
@@ -313,6 +316,8 @@ def ETL():
             )
         
             #Fim isa individual
+            # ======================================================
+            # Começo Luiz Individual
         print('Individual Luiz')
 
         df_trusted_luiz = df_raw.copy()
@@ -386,7 +391,51 @@ def ETL():
         with open("luiz.json", "w", encoding="utf-8") as f:
                 json.dump(df_client_luiz, f, indent=4, default=str)
 
+        # ===============================================================
+        # Começo richard individual
+
+        print("(LOADING) Iniciando tratamento de rede...")
+
+        # 1. Fazendo Trusted (Camada 2)
+        # Filtrando somente as colunas que eu quero pegar
+        df_trusted_richard = df_trusted[['id_servidor', 'home_broker', 'timestamp', 'latencia_resposta_ms', 'net_bytes_sent_gb', 'net_bytes_recv_gb']].copy()
+
+        # Salva o CSV na Camada do trusted localmente e no S3 (Sempre salvando o Trusted para registro)
+        pd.DataFrame(df_trusted_richard).to_csv("richard.csv", encoding="utf-8", sep=";", index=False)
+        Salvar_s3(df_trusted_richard, TRUSTED_RICHARD_CAMINHO)
+
+        # 2. Fazendo Client (Camada 3 - arquivo JSON)
+        # Se latencia, bytes_sent e bytes_recv forem todos nulos, o código pula o bloco abaixo
+        cols_rede = ['latencia_resposta_ms', 'net_bytes_sent_gb', 'net_bytes_recv_gb']
         
+        # Verifica se as colunas declaradas são nulas (todas no caso)
+        if df_trusted_richard[cols_rede].isnull().all().all():
+            print(f"TRATAMENTO: O servidor {nome_do_servidor} não quer coletar dados de Rede ou deu algum erro. Pulando script de JSON.")
+        else:
+            print(f"(LOADING) Gerando arquivo JSON de Latência para: {nome_do_servidor}")
+            df_client_richard = df_trusted_richard.copy()
+
+            # Transforma qualquer NaN em 0 para o JSON não quebrar no site
+            df_client_richard = df_client_richard.astype(object).where(pd.notnull(df_client_richard), 0)
+
+            # Converte para lista de dicionários (formato JSON)
+            dados_richard_json = df_client_richard.to_dict(orient='records')
+
+            # Salva o JSON localmente
+            with open('latencia_richard.json', 'w') as f:
+                json.dump(dados_richard_json, f, indent=4, default=str)
+
+            # Envia o JSON para a pasta client no S3
+            print("[LOADING] Enviando JSON de Rede e Latêncai para o bucket...")
+            with open('latencia_richard.json', 'rb') as f:
+                s3_client.put_object(Bucket=NOME_BUCKET,
+                                     Key=CLIENT_RICHARD_CAMINHO,
+                                     Body=f,
+                                     ContentType='application/json')
+
+            print("[LOADING] Arquivo JSON de Rede e Latência enviado com sucesso!")
+
+        # Fim richard individual
         # ===============================================================
 
     # Tratativas de Erro caso a AWS não funfe
