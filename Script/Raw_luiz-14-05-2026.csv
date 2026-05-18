@@ -1,2 +1,0 @@
-id_servidor;home_broker;timestamp;cpu_percent;cpu_freq_current;cpu_time_idle;ram_total_gb;ram_available_gb;ram_used_gb;ram_percent;swap_percent;swap_used_gb;swap_free_gb;disk_percent;disco_taxa_transferencia;latencia_resposta_ms;net_bytes_sent_gb;net_bytes_recv_gb;total_processos;processo_maior_consumo
-4;luiz;14-05-2026 15:12:09;6.5;4397.66;92.3;13.34;6.37;6.97;52.3;0.0;0.0;2.0;63.7;0.0;3.63;0.34;0.47;661;PWAAT.exe (PID: 30939) - 80.9%

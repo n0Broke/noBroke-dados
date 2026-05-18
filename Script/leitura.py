@@ -218,7 +218,7 @@ def ETL():
 
         df_client_isabela = df_trusted_isabela.copy()
         df_client_isabela["timestamp"] = pd.to_datetime(df_client_isabela["timestamp"], dayfirst=True, errors="coerce")
-        print("sei que vai dar errado")
+        
         agora = datetime.now()
         inicio_atual = agora - timedelta(minutes=15)
         inicio_anterior = agora - timedelta(minutes=30)
@@ -311,11 +311,83 @@ def ETL():
                 Body=f,
                 ContentType="application/json"
             )
-
+        
             #Fim isa individual
+        print('Individual Luiz')
 
+        df_trusted_luiz = df_raw.copy()
 
-            # ===============================================================
+        colunas_remover_2 = [
+                'cpu_percent', 'cpu_freq_current', 'cpu_time_idle', 'ram_total_gb', 'ram_available_gb', 
+                'ram_used_gb','swap_used_gb', 'swap_free_gb', 'disk_percent', 'latencia_resposta_ms',
+                'disco_taxa_transferencia','net_bytes_sent_gb', 'net_bytes_recv_gb', 'total_processos','processo_maior_consumo', 
+                'metodo', 'endpoint', 'status_code','latencia_ms'
+            ]
+        
+        df_trusted_luiz = df_trusted_luiz.drop(columns=colunas_remover_2, errors='ignore')
+
+        # transformar tudo em float para conseguir fazer as operações matemáticas.
+
+        print('Transformando os valores do csv em numerais')
+
+        df_trusted_luiz['timestamp'] = pd.to_datetime(df_trusted_luiz['timestamp'], dayfirst=True, errors='coerce')
+        df_trusted_luiz = df_trusted_luiz.sort_values(by=['home_broker', 'timestamp']).reset_index(drop=True)
+        df_trusted_luiz['ram_percent'] = pd.to_numeric(df_trusted_luiz['ram_percent'], errors='coerce')
+        df_trusted_luiz['swap_percent'] = pd.to_numeric(df_trusted_luiz['swap_percent'], errors='coerce')
+
+        correlacoes = []
+        tendencias_minuto = []
+        horas_registro = []
+        etas = []
+        projeções_futuras = []
+
+        janela_previsao = 24
+
+        for i in range(len(df_trusted_luiz)):
+             servidor_atual = df_trusted_luiz.loc[i, 'home_broker']
+             horario_registro = df_trusted_luiz.loc[i, 'timestamp']
+             ram_registro = df_trusted_luiz.loc[i, 'ram_percent']
+
+             df_luiz = df_trusted_luiz [
+                  (df_trusted_luiz['home_broker'] == servidor_atual) &
+                  (df_trusted_luiz['timestamp'] <= horario_registro)
+             ].tail(janela_previsao)
+             
+             horas_registro.append(horario_registro.strftime('%H:%M:%S')if pd.notnull(horario_registro) else None)
+             
+             correlacao = calcular_correcao_movel(df_luiz)
+             taxa_minuto = calcular_tendencia_ram(df_luiz)
+             eta = calcular_eta_ram(ram_registro, taxa_minuto)
+             predicoes = calcular_projeções_futuras(ram_registro, taxa_minuto, df_luiz)
+
+             correlacoes.append(correlacao)
+             tendencias_minuto.append(taxa_minuto)
+             etas.append(eta)
+             projeções_futuras.append(predicoes)
+
+        df_trusted_luiz['correlacao_ram_swap'] = correlacoes
+        df_trusted_luiz['tendencia_ram_por_minuto'] = tendencias_minuto
+        df_trusted_luiz['hora_registro'] = horas_registro
+        df_trusted_luiz['ETA'] = etas
+        
+        
+        df_projeções = pd.DataFrame(projeções_futuras, columns=['proj1', 'proj2', 'proj3', 'proj4', 'proj5'])
+        df_trusted_luiz = pd.concat([df_trusted_luiz, df_projeções], axis=1)
+
+        print('Transformando em trusted')
+        pd.DataFrame(df_trusted_luiz).to_csv("luiz_trusted.csv", encoding="utf-8", sep=";", index=False)
+        
+        df_client_luiz = df_trusted_luiz.copy()
+
+        df_client_luiz = df_client_luiz.astype(object).where(pd.notnull(df_client_luiz), None)
+        
+        df_client_luiz = df_client_luiz.to_dict(orient="records")
+
+        with open("luiz.json", "w", encoding="utf-8") as f:
+                json.dump(df_client_luiz, f, indent=4, default=str)
+
+        
+        # ===============================================================
 
     # Tratativas de Erro caso a AWS não funfe
     except EndpointConnectionError:
@@ -376,6 +448,70 @@ def porcentagem(parte, total):
                 if total == 0:
                     return 0
                 return round((parte / total) * 100, 2)
+
+def calcular_correcao_movel(df_janela):
+    if len(df_janela) < 5:
+        return 0.0
+        
+    df_limpo = df_janela.dropna(subset=['ram_percent', 'swap_percent'])
+    
+    if df_limpo['ram_percent'].std() == 0 or df_limpo['swap_percent'].std() == 0:
+        return 0.0
+        
+    corr_val = df_limpo['ram_percent'].corr(df_limpo['swap_percent'])
+    
+    return round(corr_val, 4) if pd.notnull(corr_val) else 0.0
+
+def calcular_tendencia_ram(df_janela):
+    if len(df_janela) < 3 or df_janela['ram_percent'].isnull().any():
+        return 0.0
+    
+    tempo_delta = (df_janela['timestamp'] - df_janela['timestamp'].min()).dt.total_seconds()
+    
+    if tempo_delta.max() == 0:
+        return 0.0
+        
+    tempos_minutos = tempo_delta / 60.0
+    valores_ram = df_janela['ram_percent'].values
+    
+    try:
+        coeficientes = np.polyfit(tempos_minutos, valores_ram, 1)
+        return round(coeficientes[0], 4)
+    except Exception:
+        return 0.0
+
+
+def calcular_eta_ram(ram_atual, taxa_minuto):
+    if taxa_minuto > 0:
+        ram_restante = 100.0 - ram_atual
+        if ram_restante <= 0:
+            return "Ja atingiu 100%"
+        return f"{round(ram_restante / taxa_minuto, 2)} min"
+    elif taxa_minuto < 0:
+        return "Tendencia de Queda (Estavel)"
+    else:
+        return "Estacionario / Sem Variacao"
+
+
+def calcular_projeções_futuras(ram_atual, taxa_minuto, df_janela):
+    if len(df_janela) < 3:
+        return [None, None, None, None, None]
+        
+    tempo_delta = (df_janela['timestamp'] - df_janela['timestamp'].min()).dt.total_seconds()
+    
+    if tempo_delta.max() == 0:
+        intervalo_medio = 5 / 60.0
+    else:
+        tempos_minutos = tempo_delta / 60.0
+        intervalo_medio = np.diff(tempos_minutos).mean() if len(tempos_minutos) > 1 else 5 / 60.0
+
+    proximos_passos = []
+    for passo in range(1, 6):
+        predicao = ram_atual + (taxa_minuto * (intervalo_medio * passo))
+        predicao = max(0.0, min(100.0, round(predicao, 2)))  
+        proximos_passos.append(predicao)
+        
+    return proximos_passos
 
 def variacao_percentual(atual, anterior):
                 if anterior == 0:
