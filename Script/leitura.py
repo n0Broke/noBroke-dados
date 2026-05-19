@@ -16,12 +16,12 @@ import numpy as np
 # Configurações pra se conectar com banco de Dados (credenciais aqui)
 config = {
     'user':"root",
-    'password':"#Rich130407",
+    'password':"Mywtty135790",
     'host':"localhost",
     'database':"noBroke" 
 }
 
-NOME_BUCKET = 'teste-sprint-etl' # Nome do Bucket na sua S3
+NOME_BUCKET = 's3-bucket-projeto-unico1' # Nome do Bucket na sua S3
 RAW_CAMINHO = 'RAW/' # Caminho dentro do Bucket até a pasta da Camada 1
 TRUSTED_CAMINHO = 'TRUSTED/Trusted.csv' # Caminho pra criar o Arquivo Trusted (Camada 2)
 CLIENT_CAMINHO = 'CLIENT/Client.csv' # Caminho para criar o Arquivo Client (Camada 3)
@@ -142,7 +142,7 @@ def ETL():
 
                 if nome_coluna in df_trusted.columns:
                     # Garante que a coluna seja numérica
-                    df_trusted[nome_coluna] = pd.to_numeric(df_trusted[nome_coluna], errors='coerce')
+                    df_trusted[nome_coluna] = pd.to_numeric(df_trusted[nome_coluna], errors='coerce').astype(float)
 
                     # Só processa a conversão se a coluna não estiver toda vazia para este servidor
                     if not df_trusted.loc[filtro_servidor, nome_coluna].isnull().all():
@@ -313,7 +313,7 @@ def ETL():
 
         with open("isa.json", "rb") as f:
                 s3_client.put_object(
-                Bucket='s3-bucket-projeto-unico',
+                Bucket='s3-bucket-projeto-unico1',
                 Key="CLIENT/isa.json",
                 Body=f,
                 ContentType="application/json"

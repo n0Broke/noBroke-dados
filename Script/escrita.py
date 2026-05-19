@@ -178,7 +178,7 @@ requisicoes = {
 
 config = {
     'user': "root",
-    'password':"#Rich130407",
+    'password':"Mywtty135790",
     'host': "localhost",
     'database': "noBroke" 
 }
@@ -186,7 +186,7 @@ config = {
 fuso_brasil = pytz.timezone('America/Sao_Paulo')
 
 
-NAME_BUCKET = 'teste-sprint-etl'#Vamos mudar pra um nome do projeto
+NAME_BUCKET = 's3-bucket-projeto-unico1' #Vamos mudar pra um nome do projeto
 
 s3_client = boto3.client(
     's3',
@@ -197,6 +197,7 @@ s3_client = boto3.client(
 
 resultados = {
     "id_servidor":[],
+    "fk_empresa": [],
     "home_broker":[],
     "timestamp": [],
     "cpu_percent":[], 
@@ -232,7 +233,7 @@ def GerarRequisicao():
 
     return lista_requisicoes_feitas
 
-def buscar_idServidor(nome_servidor):
+def buscar_idServidor(nome_servidor, fk_empresa):
     try:
         conn = mysql.connector.connect(**config) # Tenta fazer uma conexão com as "**config" (credenciais) que demos
         cursor = conn.cursor(dictionary=True) # Cria um "executor" de comandos SQL
@@ -242,11 +243,11 @@ def buscar_idServidor(nome_servidor):
 
         # Aqui está o comando que irá fazer quando se conectar
         query = """
-            SELECT id_servidor FROM servidor WHERE nome = %s;
+            SELECT id_servidor FROM servidor WHERE nome = %s AND fk_empresa = %s;
         """
 
         # Realiza a função de conexão passando a query (oque é pra buscar) e o nome do servidor que fica no %s
-        cursor.execute(query, (nome_servidor,))
+        cursor.execute(query, (nome_servidor, fk_empresa))
         resultado = cursor.fetchone() # Pega todos os resultados que achar
         
         # Fecha a conexão e retorna o que achou de maneira bruta
@@ -426,9 +427,9 @@ def print_barra(Componente, nomeComponente, metrica, limite_barra, numDivisao):
 
 
 
-
-nome_servidor = "luiz"
-id_servidor = buscar_idServidor(nome_servidor)
+fk_empresa = 1
+nome_servidor = "SRV-Argos-01"
+id_servidor = buscar_idServidor(nome_servidor, fk_empresa)
 
 # Verificar se o id_Servidor existe
 if id_servidor is None:
@@ -469,6 +470,7 @@ for i in range(1, 41):
     pid_mais_consumista = pid_consumindo_mais()
     requisicoes_geradas = GerarRequisicao()
 
+
     for requisicao in requisicoes_geradas:
 
         resultados["id_servidor"].append(id_servidor)
@@ -495,6 +497,7 @@ for i in range(1, 41):
         resultados["endpoint"].append(requisicao["endpoint"])
         resultados["status_code"].append(requisicao["status_code"])
         resultados["latencia_ms"].append(requisicao["latencia_ms"])
+        resultados["fk_empresa"].append(fk_empresa)
 
     print(f"""
           +------------------------------------------------------------------------------+
