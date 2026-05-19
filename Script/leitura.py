@@ -152,6 +152,10 @@ def ETL():
                             df_trusted.loc[filtro_servidor, nome_coluna] = round(df_trusted.loc[filtro_servidor, nome_coluna] / 1000, 2)
 
         # Garante que o id_servidor seja um número inteiro e não float/NaN
+        
+        if df_trusted['id_servidor'].dtype == 'object':
+            df_trusted['id_servidor'] = df_trusted['id_servidor'].replace('[]', '0')
+            
         df_trusted['id_servidor'] = df_trusted['id_servidor'].fillna(0).astype(int)
 
         # Salva no diretório trusted (Camada 2)
