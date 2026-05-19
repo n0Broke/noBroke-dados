@@ -16,7 +16,7 @@ import numpy as np
 # Configurações pra se conectar com banco de Dados (credenciais aqui)
 config = {
     'user':"root",
-    'password':"Mywtty135790",
+    'password':"pepe@2011",
     'host':"localhost",
     'database':"noBroke" 
 }
@@ -313,7 +313,7 @@ def ETL():
 
         with open("isa.json", "rb") as f:
                 s3_client.put_object(
-                Bucket='s3-bucket-projeto-unico1',
+                Bucket=NOME_BUCKET,
                 Key="CLIENT/isa.json",
                 Body=f,
                 ContentType="application/json"
@@ -378,12 +378,13 @@ def ETL():
         df_trusted_luiz['tendencia_ram_por_minuto'] = tendencias_minuto
         df_trusted_luiz['hora_registro'] = horas_registro
         df_trusted_luiz['ETA'] = etas
-        
-        
+
         df_projeções = pd.DataFrame(projeções_futuras, columns=['proj1', 'proj2', 'proj3', 'proj4', 'proj5'])
         df_trusted_luiz = pd.concat([df_trusted_luiz, df_projeções], axis=1)
 
-        print('Transformando em trusted')
+
+        print("(LOADING) Enviando o luiz_trusted csv pro bucket")
+        Salvar_s3(df_trusted_isabela, "TRUSTED/luiz_trusted.csv")
         pd.DataFrame(df_trusted_luiz).to_csv("luiz_trusted.csv", encoding="utf-8", sep=";", index=False)
         
         df_client_luiz = df_trusted_luiz.copy()
@@ -394,6 +395,14 @@ def ETL():
 
         with open("luiz.json", "w", encoding="utf-8") as f:
                 json.dump(df_client_luiz, f, indent=4, default=str)
+
+        with open("luiz.json", "rb") as f:
+                s3_client.put_object(
+                Bucket=NOME_BUCKET,
+                Key="CLIENT/luiz.json",
+                Body=f,
+                ContentType="application/json"
+            )
 
         # ===============================================================
         # Começo richard individual
@@ -411,7 +420,8 @@ def ETL():
         # 2. Fazendo Client (Camada 3 - arquivo JSON)
         # Se latencia, bytes_sent e bytes_recv forem todos nulos, o código pula o bloco abaixo
         cols_rede = ['latencia_resposta_ms', 'net_bytes_sent_gb', 'net_bytes_recv_gb']
-        
+
+        nome_do_servidor = 'SRV-Argos-isa-BD'
         # Verifica se as colunas declaradas são nulas (todas no caso)
         if df_trusted_richard[cols_rede].isnull().all().all():
             print(f"TRATAMENTO: O servidor {nome_do_servidor} não quer coletar dados de Rede ou deu algum erro. Pulando script de JSON.")
@@ -502,11 +512,11 @@ def porcentagem(parte, total):
                     return 0
                 return round((parte / total) * 100, 2)
 
-def calcular_correcao_movel(df_janela):
-    if len(df_janela) < 5:
+def calcular_correcao_movel(df_luiz):
+    if len(df_luiz) < 5:
         return 0.0
         
-    df_limpo = df_janela.dropna(subset=['ram_percent', 'swap_percent'])
+    df_limpo = df_luiz.dropna(subset=['ram_percent', 'swap_percent'])
     
     if df_limpo['ram_percent'].std() == 0 or df_limpo['swap_percent'].std() == 0:
         return 0.0
@@ -515,17 +525,17 @@ def calcular_correcao_movel(df_janela):
     
     return round(corr_val, 4) if pd.notnull(corr_val) else 0.0
 
-def calcular_tendencia_ram(df_janela):
-    if len(df_janela) < 3 or df_janela['ram_percent'].isnull().any():
+def calcular_tendencia_ram(df_luiz):
+    if len(df_luiz) < 3 or df_luiz['ram_percent'].isnull().any():
         return 0.0
     
-    tempo_delta = (df_janela['timestamp'] - df_janela['timestamp'].min()).dt.total_seconds()
+    tempo_delta = (df_luiz['timestamp'] - df_luiz['timestamp'].min()).dt.total_seconds()
     
     if tempo_delta.max() == 0:
         return 0.0
         
     tempos_minutos = tempo_delta / 60.0
-    valores_ram = df_janela['ram_percent'].values
+    valores_ram = df_luiz['ram_percent'].values
     
     try:
         coeficientes = np.polyfit(tempos_minutos, valores_ram, 1)
@@ -546,11 +556,11 @@ def calcular_eta_ram(ram_atual, taxa_minuto):
         return "Estacionario / Sem Variacao"
 
 
-def calcular_projeções_futuras(ram_atual, taxa_minuto, df_janela):
-    if len(df_janela) < 3:
+def calcular_projeções_futuras(ram_atual, taxa_minuto, df_luiz):
+    if len(df_luiz) < 3:
         return [None, None, None, None, None]
         
-    tempo_delta = (df_janela['timestamp'] - df_janela['timestamp'].min()).dt.total_seconds()
+    tempo_delta = (df_luiz['timestamp'] - df_luiz['timestamp'].min()).dt.total_seconds()
     
     if tempo_delta.max() == 0:
         intervalo_medio = 5 / 60.0
