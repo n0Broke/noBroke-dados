@@ -16,7 +16,7 @@ import numpy as np
 # Configurações pra se conectar com banco de Dados (credenciais aqui)
 config = {
     'user':"root",
-    'password':"pepe@2011",
+    'password':"#Rich130407",
     'host':"localhost",
     'database':"noBroke" 
 }
@@ -411,7 +411,7 @@ def ETL():
 
         # 1. Fazendo Trusted (Camada 2)
         # Filtrando somente as colunas que eu quero pegar
-        df_trusted_richard = df_trusted[['id_servidor', 'home_broker', 'timestamp', 'latencia_resposta_ms', 'net_bytes_sent_gb', 'net_bytes_recv_gb']].copy()
+        df_trusted_richard = df_trusted[['id_servidor', 'home_broker', 'timestamp', 'latencia_resposta_ms', 'net_bytes_sent_gb', 'net_bytes_recv_gb', 'upload_mbps', 'download_mbps']].copy()
 
         # Salva o CSV na Camada do trusted localmente e no S3 (Sempre salvando o Trusted para registro)
         pd.DataFrame(df_trusted_richard).to_csv("richard.csv", encoding="utf-8", sep=";", index=False)
@@ -419,7 +419,7 @@ def ETL():
 
         # 2. Fazendo Client (Camada 3 - arquivo JSON)
         # Se latencia, bytes_sent e bytes_recv forem todos nulos, o código pula o bloco abaixo
-        cols_rede = ['latencia_resposta_ms', 'net_bytes_sent_gb', 'net_bytes_recv_gb']
+        cols_rede = ['latencia_resposta_ms', 'net_bytes_sent_gb', 'net_bytes_recv_gb', 'upload_mbps', 'download_mbps']
 
         nome_do_servidor = 'SRV-Argos-isa-BD'
         # Verifica se as colunas declaradas são nulas (todas no caso)
@@ -428,6 +428,10 @@ def ETL():
         else:
             print(f"(LOADING) Gerando arquivo JSON de Latência para: {nome_do_servidor}")
             df_client_richard = df_trusted_richard.copy()
+
+            # Renomeia as colunas para nomes mais amigáveis no JSON
+            df_client_richard.rename(columns={'upload_mbps': 'upload',
+                                              'download_mbps': 'download'}, inplace=True)
 
             # Transforma qualquer NaN em 0 para o JSON não quebrar no site
             df_client_richard = df_client_richard.astype(object).where(pd.notnull(df_client_richard), 0)

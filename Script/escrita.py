@@ -178,7 +178,7 @@ requisicoes = {
 
 config = {
     'user': "root",
-    'password':"Mywtty135790",
+    'password':"#Rich130407",
     'host': "localhost",
     'database': "noBroke" 
 }
@@ -220,7 +220,11 @@ resultados = {
     "metodo": [],
     "endpoint": [],
     "status_code": [],
-    "latencia_ms": []
+    "latencia_ms": [],
+    "jitter_ms": [],
+    "packet_loss_percent": [],
+    "upload_mbps": [],
+    "download_mbps": []
 }
 
 def GerarRequisicao():
@@ -333,45 +337,96 @@ def coletar_taxa_transferencia():
     taxa_transferencia = round(conversao_mb(read_disco+write_disco),2)
     return (taxa_transferencia)
 
-def coletar_net_packets_sent():
+def coletar_net_bytes_sent():
     rede = psutil.net_io_counters()
-    return round(conversao_mb(rede.packets_sent),2)
+    return round(conversao_mb(rede.bytes_sent),2)
 
-def coletar_net_packets_recv():
+def coletar_net_bytes_recv():
     rede = psutil.net_io_counters()
-    return round(conversao_mb(rede.packets_recv),2)
+    return round(conversao_mb(rede.bytes_recv),2)
 
 def coletar_total_processos():
     return round(len(psutil.pids()),2)
 
-def coletar_latencia_resposta_ms():
+def coletar_metricas_rede(host="104.18.43.121", qtd_pings=10):
+    # Utiliza o Ping definido como do HomeBreaker
+    # Faz múltiplos pings e retorna latência média, jitter e perda de pacotes.
+    
+    # Tenta acessar o tipo de SO para usar o comando ping correto (Windows usa -n, Linux/Mac usa -c)
     try:
-        param = "-n" if platform.system().lower() == "windows" else "-c" # Verifica o sistema operacional do
+        sistema = platform.system().lower()
+        param_count = "-n" if sistema == "windows" else "-c"
+        
+        # Executa o comando de Ping e vê a saída em ms, exemplo: "time=23ms" ou "tempo=23ms"
         resultado = subprocess.run(
-            ["ping", param, "1", "104.18.43.121"],
-            capture_output=True, # faz o resultado ser capturado no .stdout da linha 243
-            text=True, # transforma em String ao invés de byte
-            timeout=2 # Timeout de 2s
-            )
-        if resultado.returncode != 0:
-            return 0.0
-
-        linhas = resultado.stdout.lower().replace("<", "=")
-        linhas = linhas.split("\n")
-        for linha in linhas:
-               if "tempo=" in linha or "time=" in linha:
-                    chave = "tempo=" if "tempo=" in linha else "time="
-                    parte_valor = linha.split(chave)[1]
-                    valor_final = parte_valor.split("ms")[0].strip().split(" ")[0].replace(",", ".")
-                    return round(float(valor_final), 2)
-    except FileNotFoundError:
-        print("Comando 'Ping' não tem no Sistema. Baixar os pacotes")
-        return 0.0
+            ["ping", param_count, str(qtd_pings), host],
+            capture_output=True,
+            text=True,
+            timeout=qtd_pings + 5
+        )
+        
+        # Deixa a saída minúscula e substitui "<" por "=" (afinal o ms n é exato mas tratamos como exato)
+        output = resultado.stdout.lower().replace("<", "=")
+        
+        # Extrai todos os tempos de resposta (regex pega "time=XX" ou "tempo=XX")
+        # Resumindo: Ele procura na saída do ping por qualquer coisa que seja "time=23ms" ou "tempo=23ms" e pega o número 23 (pode ser decimal também)
+        tempos = re.findall(r"(?:time|tempo)=([\d,\.]+)", output)
+        tempos = [float(t.replace(",", ".")) for t in tempos]
+        
+        # Se não tiver pego tempo, retorna 000 em tudo e 100% de perda de pacote
+        if not tempos:
+            return {"latencia": 0.0, "jitter": 0.0, "packet_loss": 100.0}
+        
+        # Cálculo Latência Média
+        latencia_media = round(sum(tempos) / len(tempos), 2)
+        
+        # Cálculo do jitter (média das diferenças absolutas entre pings consecutivos)
+        # Como é calculado: Ele pega a diferença entre cada ping e o anterior, tira o valor absoluto (pra não ter número negativo) 
+        # e depois faz a média dessas diferenças. Isso mostra o quanto os tempos de resposta variam entre si. (verifica se o tempo é maior que 1)
+        if len(tempos) > 1:
+            diferencas = [abs(tempos[i] - tempos[i-1]) for i in range(1, len(tempos))]
+            jitter = round(sum(diferencas) / len(diferencas), 2)
+        else:
+            jitter = 0.0
+        
+        # Cálculo de Perda de Pacotes
+        # Cálculo: (quantidade de pings enviados - quantidade de pings recebidos) / quantidade de pings enviados * 100 arredondado em 2 casa decimal
+        pacotes_recebidos = len(tempos)
+        packet_loss = round(((qtd_pings - pacotes_recebidos) / qtd_pings) * 100, 2)
+        
+        # Retorna todos os resultados
+        return {
+            "latencia": latencia_media,
+            "jitter": jitter,
+            "packet_loss": packet_loss
+        }
+        
+        # Se não, retorna tudo zerado
     except Exception as e:
-        print(f"Erro ao pegar a Latência: {e}")
-        return 0.0
-
-    return 0.0
+        print(f"Erro ao coletar métricas de rede: {e}")
+        return {"latencia": 0.0, "jitter": 0.0, "packet_loss": 0.0}
+    
+def coletar_banda_rede():
+    # Mede a banda usada em MB/s (download e upload separados).
+    
+    rede_antes = psutil.net_io_counters()
+    time.sleep(1)
+    rede_depois = psutil.net_io_counters()
+    
+    # Diferença em bytes durante 1 segundo = bytes por segundo
+    bytes_enviados = rede_depois.bytes_sent - rede_antes.bytes_sent
+    bytes_recebidos = rede_depois.bytes_recv - rede_antes.bytes_recv
+    
+    # Converte para MB/s
+    upload_mbps = round(conversao_mb(bytes_enviados), 4)
+    download_mbps = round(conversao_mb(bytes_recebidos), 4)
+    banda_total = round(upload_mbps + download_mbps, 4)
+    
+    return {
+        "upload_mbps": upload_mbps,
+        "download_mbps": download_mbps,
+        "banda_total": banda_total
+    }
 
 # Função pra achar o programa que tá usando mais CPU agora.
 # Resolve o problema de pegar 0% ou pegar o processo fantasma do sistema (Idle)
@@ -427,8 +482,8 @@ def print_barra(Componente, nomeComponente, metrica, limite_barra, numDivisao):
 
 
 
-fk_empresa = 1
-nome_servidor = "SRV-Argos-01"
+fk_empresa = 2
+nome_servidor = "luiz"
 id_servidor = buscar_idServidor(nome_servidor, fk_empresa)
 
 # Verificar se o id_Servidor existe
@@ -463,9 +518,17 @@ for i in range(1, 41):
     swap_free = coletar_swap_free_gb()
     disk_percent = coletar_disk_percent()
     disco_taxa_transferencia = coletar_taxa_transferencia()
-    latencia_resposta = coletar_latencia_resposta_ms()
-    net_bytes_sent = coletar_net_packets_sent()
-    net_bytes_recv = coletar_net_packets_recv()
+    # Minhas coletas de rede
+    metricas_rede = coletar_metricas_rede(qtd_pings=5)
+    latencia_resposta = metricas_rede["latencia"]
+    jitter_atual = metricas_rede["jitter"]
+    packet_loss_atual = metricas_rede["packet_loss"]
+    banda = coletar_banda_rede()
+    upload_atual = banda["upload_mbps"]
+    download_atual = banda["download_mbps"]
+    net_bytes_sent = coletar_net_bytes_sent()
+    net_bytes_recv = coletar_net_bytes_recv()
+    # _________________________________________
     total_processos = coletar_total_processos()
     pid_mais_consumista = pid_consumindo_mais()
     requisicoes_geradas = GerarRequisicao()
@@ -498,6 +561,10 @@ for i in range(1, 41):
         resultados["status_code"].append(requisicao["status_code"])
         resultados["latencia_ms"].append(requisicao["latencia_ms"])
         resultados["fk_empresa"].append(fk_empresa)
+        resultados["jitter_ms"].append(jitter_atual)
+        resultados["packet_loss_percent"].append(packet_loss_atual)
+        resultados["upload_mbps"].append(upload_atual)
+        resultados["download_mbps"].append(download_atual)
 
     print(f"""
           +------------------------------------------------------------------------------+
@@ -526,6 +593,13 @@ for i in range(1, 41):
                 !--------PROCESSOS ATIVOS ---------!
                 {print_barra(resultados["total_processos"][len(resultados['total_processos'])-1], "Processos Ativos", "qtd", 10, 200)}
                 Processo de maior consumo - { resultados["processo_maior_consumo"][len(resultados['processo_maior_consumo'])-1]}
+
+                !--------DADOS DE REDE---------!
+                {print_barra(latencia_resposta, "Latência", "ms", 10, 1000)}
+                {print_barra(jitter_atual, "Jitter", "ms", 10, 100)}
+                {print_barra(packet_loss_atual, "Perda Pacotes", "%", 10, 100)}
+                {print_barra(upload_atual, "Upload", "MB/s", 10, 100)}
+                {print_barra(download_atual, "Download", "MB/s", 10, 100)}
 
 
 
