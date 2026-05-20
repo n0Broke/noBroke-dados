@@ -186,7 +186,7 @@ config = {
 fuso_brasil = pytz.timezone('America/Sao_Paulo')
 
 
-NAME_BUCKET = 's3-bucket-projeto-unico1' #Vamos mudar pra um nome do projeto
+NAME_BUCKET = 'buckettestenobroke' #Vamos mudar pra um nome do projeto
 
 s3_client = boto3.client(
     's3',
@@ -196,8 +196,8 @@ s3_client = boto3.client(
 )
 
 resultados = {
-    "id_servidor":[],
     "fk_empresa": [],
+    "id_servidor":[],
     "home_broker":[],
     "timestamp": [],
     "cpu_percent":[], 
@@ -237,7 +237,7 @@ def GerarRequisicao():
 
     return lista_requisicoes_feitas
 
-def buscar_idServidor(nome_servidor, fk_empresa):
+def buscar_fkEmpresa(nome_servidor,):
     try:
         conn = mysql.connector.connect(**config) # Tenta fazer uma conexão com as "**config" (credenciais) que demos
         cursor = conn.cursor(dictionary=True) # Cria um "executor" de comandos SQL
@@ -247,11 +247,11 @@ def buscar_idServidor(nome_servidor, fk_empresa):
 
         # Aqui está o comando que irá fazer quando se conectar
         query = """
-            SELECT id_servidor FROM servidor WHERE nome = %s AND fk_empresa = %s;
+            SELECT fk_empresa FROM servidor WHERE nome = %s;
         """
 
         # Realiza a função de conexão passando a query (oque é pra buscar) e o nome do servidor que fica no %s
-        cursor.execute(query, (nome_servidor, fk_empresa))
+        cursor.execute(query, (nome_servidor,))
         resultado = cursor.fetchone() # Pega todos os resultados que achar
         
         # Fecha a conexão e retorna o que achou de maneira bruta
@@ -259,7 +259,7 @@ def buscar_idServidor(nome_servidor, fk_empresa):
         conn.close()
 
         if resultado:
-            return resultado['id_servidor']
+            return resultado['fk_empresa']
         else:
             print(f"Servidor '{nome_servidor}' não foi encontrado no Banco de Dados!")
             return None
@@ -270,8 +270,8 @@ def buscar_idServidor(nome_servidor, fk_empresa):
     except Exception as erro:
         print(f"Erro: {erro}")
         return None
-    
-def buscar_fkEmpresa(nome_servidor):
+
+def buscar_idServidor(nome_servidor,):
     try:
         conn = mysql.connector.connect(**config) # Tenta fazer uma conexão com as "**config" (credenciais) que demos
         cursor = conn.cursor(dictionary=True) # Cria um "executor" de comandos SQL
@@ -285,7 +285,7 @@ def buscar_fkEmpresa(nome_servidor):
         """
 
         # Realiza a função de conexão passando a query (oque é pra buscar) e o nome do servidor que fica no %s
-        cursor.execute(query, (nome_servidor))
+        cursor.execute(query, (nome_servidor,))
         resultado = cursor.fetchone() # Pega todos os resultados que achar
         
         # Fecha a conexão e retorna o que achou de maneira bruta
@@ -516,9 +516,9 @@ def print_barra(Componente, nomeComponente, metrica, limite_barra, numDivisao):
 
 
 
-fk_empresa = buscar_fkEmpresa("luiz")
 nome_servidor = "luiz"
-id_servidor = buscar_idServidor(nome_servidor, fk_empresa)
+fk_empresa = buscar_fkEmpresa(nome_servidor)
+id_servidor = buscar_idServidor(nome_servidor)
 
 # Verificar se o id_Servidor existe
 if id_servidor is None:
@@ -569,7 +569,7 @@ for i in range(1, 41):
 
 
     for requisicao in requisicoes_geradas:
-
+        resultados["fk_empresa"].append(fk_empresa)
         resultados["id_servidor"].append(id_servidor)
         resultados["home_broker"].append(nome_servidor)
         resultados["timestamp"].append(horario_tratado)
@@ -594,7 +594,6 @@ for i in range(1, 41):
         resultados["endpoint"].append(requisicao["endpoint"])
         resultados["status_code"].append(requisicao["status_code"])
         resultados["latencia_ms"].append(requisicao["latencia_ms"])
-        resultados["fk_empresa"].append(fk_empresa)
         resultados["jitter_ms"].append(jitter_atual)
         resultados["packet_loss_percent"].append(packet_loss_atual)
         resultados["upload_mbps"].append(upload_atual)
