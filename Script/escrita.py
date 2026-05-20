@@ -270,6 +270,40 @@ def buscar_idServidor(nome_servidor, fk_empresa):
     except Exception as erro:
         print(f"Erro: {erro}")
         return None
+    
+def buscar_fkEmpresa(nome_servidor):
+    try:
+        conn = mysql.connector.connect(**config) # Tenta fazer uma conexão com as "**config" (credenciais) que demos
+        cursor = conn.cursor(dictionary=True) # Cria um "executor" de comandos SQL
+        # dictionary=True faz retornar dados como dicionário: {'coluna': 'valor'}
+        # Sem isso, retornaria tupla: ('valor1', 'valor2')
+
+
+        # Aqui está o comando que irá fazer quando se conectar
+        query = """
+            SELECT id_servidor FROM servidor WHERE nome = %s;
+        """
+
+        # Realiza a função de conexão passando a query (oque é pra buscar) e o nome do servidor que fica no %s
+        cursor.execute(query, (nome_servidor))
+        resultado = cursor.fetchone() # Pega todos os resultados que achar
+        
+        # Fecha a conexão e retorna o que achou de maneira bruta
+        cursor.close()
+        conn.close()
+
+        if resultado:
+            return resultado['id_servidor']
+        else:
+            print(f"Servidor '{nome_servidor}' não foi encontrado no Banco de Dados!")
+            return None
+        
+    except mysql.connector.Error as erro:
+        print(f"Erro MySQL: {erro}")
+        return None
+    except Exception as erro:
+        print(f"Erro: {erro}")
+        return None
 
 def conversao_gb(valor: float):
     return valor/ (1024 ** 3)
@@ -482,7 +516,7 @@ def print_barra(Componente, nomeComponente, metrica, limite_barra, numDivisao):
 
 
 
-fk_empresa = 2
+fk_empresa = buscar_fkEmpresa("luiz")
 nome_servidor = "luiz"
 id_servidor = buscar_idServidor(nome_servidor, fk_empresa)
 
