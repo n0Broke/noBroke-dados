@@ -21,7 +21,7 @@ config = {
     'database':"noBroke" 
 }
 
-NOME_BUCKET = 's3-bucket-projeto-unico1' # Nome do Bucket na sua S3
+NOME_BUCKET = 'buckettestenobroke' # Nome do Bucket na sua S3
 RAW_CAMINHO = 'RAW/' # Caminho dentro do Bucket até a pasta da Camada 1
 TRUSTED_CAMINHO = 'TRUSTED/Trusted.csv' # Caminho pra criar o Arquivo Trusted (Camada 2)
 CLIENT_CAMINHO = 'CLIENT/Client.csv' # Caminho para criar o Arquivo Client (Camada 3)
@@ -226,15 +226,32 @@ def ETL():
         df_client_isabela = df_trusted_isabela.copy()
         df_client_isabela["timestamp"] = pd.to_datetime(df_client_isabela["timestamp"], dayfirst=True, errors="coerce")
         
-        agora = datetime.now()
-        inicio_atual = agora - timedelta(minutes=15)
-        inicio_anterior = agora - timedelta(minutes=30)
+        df_client_isabela = df_client_isabela.sort_values("timestamp")
 
+        df_client_isabela["janela_15min"] = df_client_isabela["timestamp"].dt.floor("15min")
 
-        df_atual = df_client_isabela[df_client_isabela["timestamp"] >= inicio_atual]
-        df_anterior = df_client_isabela[(df_client_isabela["timestamp"] >= inicio_anterior) &(df_client_isabela["timestamp"] < inicio_atual)]
+        janelas = sorted(df_client_isabela["janela_15min"].dropna().unique())
 
+        if len(janelas) >= 2:
+            janela_atual = janelas[-1]
+            janela_anterior = janelas[-2]
 
+            df_atual = df_client_isabela[df_client_isabela["janela_15min"] == janela_atual]
+            df_anterior = df_client_isabela[df_client_isabela["janela_15min"] == janela_anterior]
+
+        else:
+            df_atual = df_client_isabela
+            df_anterior = df_client_isabela.iloc[0:0]
+
+        print("Janela atual:", df_atual["janela_15min"].unique())
+        print("Janela anterior:", df_anterior["janela_15min"].unique())
+
+        print("Linhas atual:", len(df_atual))
+        print("Linhas anterior:", len(df_anterior))
+
+        print(df_atual)
+        print(df_anterior)
+        
         contador_ordens = (df_client_isabela["categoria"] == "ordens").sum()
 
         contador_volume = len(df_client_isabela)
@@ -303,10 +320,11 @@ def ETL():
         df_client_isabela["contador_5xx"] = contador_5xx
         df_client_isabela["variacao_5xx"] = variacao_5xx
 
-        df_client_isabela = df_client_isabela.astype(object).where(pd.notnull(df_client_isabela), None)
-        
-        dados_isabela_json = df_client_isabela.to_dict(orient="records")
+        df_client_isabela = df_client_isabela.drop(columns=["janela_15min"], errors="ignore")
 
+        df_client_isabela = df_client_isabela.astype(object).where(pd.notnull(df_client_isabela), None)
+
+        dados_isabela_json = df_client_isabela.to_dict(orient="records")
         
         with open("isa.json", "w", encoding="utf-8") as f:
                 json.dump(dados_isabela_json, f, indent=4, default=str)
@@ -318,6 +336,22 @@ def ETL():
                 Body=f,
                 ContentType="application/json"
             )
+                
+
+                print("Linhas atual:", len(df_atual))
+                print("Linhas anterior:", len(df_anterior))
+
+                print("contador_atual:", contador_atual)
+                print("contador_anterior:", contador_anterior)
+
+                print("p95_atual:", p95_atual)
+                print("p95_anterior:", p95_anterior)
+
+                print("5xx atual:", contador_5xx_atual)
+                print("5xx anterior:", contador_5xx_anterior)
+
+                print("sucesso atual:", porcentagem_sucesso_atual)
+                print("sucesso anterior:", porcentagem_sucesso_anterior)
         
             #Fim isa individual
             # ======================================================
@@ -635,15 +669,16 @@ def calcular_projeções_futuras(ram_atual, taxa_minuto, df_luiz):
     proximos_passos = []
     for passo in range(1, 6):
         predicao = ram_atual + (taxa_minuto * (intervalo_medio * passo))
-        predicao = max(0.0, min(100.0, round(predicao, 2)))  
+        predicao = max(0.0, min(100.0, round(predicao, 2)))
         proximos_passos.append(predicao)
         
     return proximos_passos
 
 def variacao_percentual(atual, anterior):
-                if anterior == 0:
-                    return 0
-                return round(((atual - anterior) / anterior) * 100, 2)
+    if anterior == 0:
+        return 0
+
+    return round(((atual - anterior) / anterior) * 100, 2)
 
 # Agora vai iniciar a ETL
 if __name__ == "__main__":

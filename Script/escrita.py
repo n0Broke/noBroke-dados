@@ -178,7 +178,7 @@ requisicoes = {
 
 config = {
     'user': "root",
-    'password':"#Rich130407",
+    'password':"Mywtty135790",
     'host': "localhost",
     'database': "noBroke" 
 }
@@ -382,7 +382,7 @@ def coletar_net_bytes_recv():
 def coletar_total_processos():
     return round(len(psutil.pids()),2)
 
-def coletar_metricas_rede(host="104.18.43.121", qtd_pings=10):
+def coletar_metricas_rede(host="104.18.43.121", qtd_pings=5):
     # Utiliza o Ping definido como do HomeBreaker
     # Faz múltiplos pings e retorna latência média, jitter e perda de pacotes.
     
