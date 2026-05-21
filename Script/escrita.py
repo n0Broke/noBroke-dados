@@ -178,7 +178,7 @@ requisicoes = {
 
 config = {
     'user': "root",
-    'password':"Mywtty135790",
+    'password':"#Rich130407",
     'host': "localhost",
     'database': "noBroke" 
 }
@@ -516,7 +516,7 @@ def print_barra(Componente, nomeComponente, metrica, limite_barra, numDivisao):
 
 
 
-nome_servidor = "luiz"
+nome_servidor = "NB1-luiz"
 fk_empresa = buscar_fkEmpresa(nome_servidor)
 id_servidor = buscar_idServidor(nome_servidor)
 
