@@ -16,7 +16,7 @@ import numpy as np
 # Configurações pra se conectar com banco de Dados (credenciais aqui)
 config = {
     'user':"root",
-    'password':"#Rich130407",
+    'password':"Mywtty135790",
     'host':"localhost",
     'database':"noBroke" 
 }
@@ -403,7 +403,66 @@ def ETL():
                 Body=f,
                 ContentType="application/json"
             )
+                
+                # ======================================================
+        # Começo Gabriel Individual
+        print('Individual do Apela Pato')
 
+
+        df_trusted_gabriel = df_raw.copy()
+
+        df_trusted_gabriel = df_trusted_gabriel[['id_servidor','fk_empresa','home_broker','cpu_percent', 'ram_total_gb', 'ram_used_gb', 'disk_percent', 'ram_percent', 'timestamp']]
+
+
+
+        print('Transformando os valores do csv em numerais')
+
+        df_trusted_gabriel['timestamp'] = pd.to_datetime(df_trusted_gabriel['timestamp'], dayfirst=True, errors='coerce')
+        df_trusted_gabriel = df_trusted_gabriel.sort_values(by=['home_broker', 'timestamp']).reset_index(drop=True)
+        df_trusted_gabriel['ram_total_gb'] = pd.to_numeric(df_trusted_gabriel['ram_total_gb'], errors='coerce')
+        df_trusted_gabriel['ram_percent'] = pd.to_numeric(df_trusted_gabriel['ram_percent'], errors='coerce')
+        df_trusted_gabriel['ram_used_gb'] = pd.to_numeric(df_trusted_gabriel['ram_used_gb'], errors='coerce')
+        df_trusted_gabriel['disk_percent'] = pd.to_numeric(df_trusted_gabriel['disk_percent'], errors='coerce')
+        df_trusted_gabriel['cpu_percent'] = pd.to_numeric(df_trusted_gabriel['cpu_percent'], errors='coerce')
+
+        horas_registro = []
+        cpu = []
+        ram_used = []
+        ram_total = []
+        disk = []
+        ram_percent = []
+        servidor_atual = []
+
+
+        for i in range(len(df_trusted_gabriel)):
+            servidor_atual.append(df_trusted_gabriel.loc[i, 'home_broker'])
+            horas_registro.append(df_trusted_gabriel.loc[i, 'timestamp'])
+            ram_percent.append(df_trusted_gabriel.loc[i, 'ram_percent'])
+            cpu.append(df_trusted_gabriel.loc[i,'cpu_percent'])
+            ram_used.append(df_trusted_gabriel.loc[i, 'ram_used_gb'])
+            disk.append(df_trusted_gabriel.loc[i,'disk_percent'])
+            ram_total.append(df_trusted_gabriel.loc[i,'ram_total_gb'])
+
+
+
+        print("(LOADING) Enviando o gabriel_trusted csv pro bucket")
+        Salvar_s3(df_trusted_gabriel, "TRUSTED/gabriel_trusted.csv")
+        pd.DataFrame(df_trusted_gabriel).to_csv("gabriel_trusted.csv", encoding="utf-8", sep=";", index=False)
+        df_client_gabriel = df_trusted_gabriel.copy()
+
+        df_client_gabriel = df_client_gabriel.astype(object).where(pd.notnull(df_client_gabriel), None)
+        df_client_gabriel = df_client_gabriel.to_dict(orient="records")
+
+        with open("gabriel.json", "w", encoding="utf-8") as f:
+            json.dump(df_client_gabriel, f, indent=4, default=str)
+
+        with open("gabriel.json", "rb") as f:
+            s3_client.put_object(
+            Bucket=NOME_BUCKET,
+            Key="CLIENT/gabriel.json",
+            Body=f,
+            ContentType="application/json"
+            )
         # ===============================================================
         # Começo richard individual
 
@@ -455,6 +514,7 @@ def ETL():
 
         # Fim richard individual
         # ===============================================================
+
 
     # Tratativas de Erro caso a AWS não funfe
     except EndpointConnectionError:
