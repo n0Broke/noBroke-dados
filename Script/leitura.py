@@ -203,14 +203,7 @@ def ETL():
         print("Entregavel da Isa")
         df_trusted_isabela = df_raw.copy()
 
-        colunas_remover = [
-                'cpu_percent', 'cpu_freq_current', 'cpu_time_idle', 
-                'ram_total_gb', 'ram_available_gb', 'ram_used_gb', 'ram_percent', 
-                'swap_percent', 'swap_used_gb', 'swap_free_gb', 'disk_percent', 'latencia_resposta_ms',
-                'disco_taxa_transferencia','net_bytes_sent_gb', 'net_bytes_recv_gb', 'total_processos','processo_maior_consumo'
-            ]
-        
-        df_trusted_isabela = df_trusted_isabela.drop(columns=colunas_remover, errors='ignore')
+        df_trusted_isabela = df_trusted_isabela[['fk_empresa','id_servidor','home_broker','timestamp','metodo','endpoint','status_code','latencia_ms']]
 
         df_trusted_isabela["categoria"] = df_trusted_isabela["endpoint"].fillna("").apply(classificar_categoria)
 
@@ -248,9 +241,6 @@ def ETL():
 
         print("Linhas atual:", len(df_atual))
         print("Linhas anterior:", len(df_anterior))
-
-        print(df_atual)
-        print(df_anterior)
         
         contador_ordens = (df_client_isabela["categoria"] == "ordens").sum()
 
@@ -360,14 +350,7 @@ def ETL():
 
         df_trusted_luiz = df_raw.copy()
 
-        colunas_remover_2 = [
-                'cpu_percent', 'cpu_freq_current', 'cpu_time_idle', 'ram_total_gb', 'ram_available_gb', 
-                'ram_used_gb','swap_used_gb', 'swap_free_gb', 'disk_percent', 'latencia_resposta_ms',
-                'disco_taxa_transferencia','net_bytes_sent_gb', 'net_bytes_recv_gb', 'total_processos','processo_maior_consumo', 
-                'metodo', 'endpoint', 'status_code','latencia_ms'
-            ]
-        
-        df_trusted_luiz = df_trusted_luiz.drop(columns=colunas_remover_2, errors='ignore')
+        df_trusted_luiz = df_trusted_luiz[['id_servidor','fk_empresa','home_broker','timestamp','ram_percent','swap_percent']]
 
         # transformar tudo em float para conseguir fazer as operações matemáticas.
 
