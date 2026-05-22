@@ -16,12 +16,12 @@ import numpy as np
 # Configurações pra se conectar com banco de Dados (credenciais aqui)
 config = {
     'user':"root",
-    'password':"Mywtty135790",
+    'password':"5",
     'host':"localhost",
     'database':"noBroke" 
 }
 
-NOME_BUCKET = 'buckettestenobroke' # Nome do Bucket na sua S3
+NOME_BUCKET = 'bucket.06-04-2026' # Nome do Bucket na sua S3
 RAW_CAMINHO = 'RAW/' # Caminho dentro do Bucket até a pasta da Camada 1
 TRUSTED_CAMINHO = 'TRUSTED/Trusted.csv' # Caminho pra criar o Arquivo Trusted (Camada 2)
 CLIENT_CAMINHO = 'CLIENT/Client.csv' # Caminho para criar o Arquivo Client (Camada 3)
@@ -44,7 +44,7 @@ s3_client = boto3.client(
 
 
 a = None
-def buscar_medidas(nome_servidor):
+def buscar_medidas(nome_servidor,):
     try:
         a = nome_servidor
         print(f"Buscando Medidas do Banco de Dados para: {nome_servidor}")
@@ -62,8 +62,6 @@ def buscar_medidas(nome_servidor):
             JOIN formato ON tipo.fk_formato = formato.id_formato
             WHERE servidor.nome = %s;
         """
-
-        
 
         # Realiza a função de conexão passando a query (oque é pra buscar) e o nome do servidor que fica no %s
         cursor.execute(query, (nome_servidor,))
@@ -118,7 +116,7 @@ def ETL():
         df_trusted = df_trusted.drop_duplicates() # Remove dados Duplicados
 
         # Define colunas que NUNCA vão ser anuladas (identificação)
-        colunas_preservar = ['id_servidor', 'home_broker', 'timestamp', 'processo_maior_consumo']
+        colunas_preservar = ['fk_empresa','id_servidor', 'home_broker', 'timestamp', 'processo_maior_consumo']
 
         print("(TRANSFORM) Removendo valores iguais a 0")
         colunas_numericas = df_trusted.select_dtypes(include=['number']).columns # Colunas apenas de números
@@ -172,33 +170,66 @@ def ETL():
         Salvar_s3(df_trusted, TRUSTED_CAMINHO)
 
         print("(LOADING) Mandando dados para o diretório 'client'")
-        df_client = df_trusted.copy() # Pega os dados e copia da Camada 2 pra 3 (antes de tratar pra JSON)
+        df_dados_feio = df_trusted.copy() # Pega os dados e copia da Camada 2 pra 3 (antes de tratar pra JSON)
         
         # Blindagem: Transforma qualquer NaN em None para o JSON exibir 'null' corretamente
-        df_client = df_client.astype(object).where(pd.notnull(df_client), None)
+        df_client_matheus = df_dados_feio.astype(object).where(pd.notnull(df_dados_feio), None)
         
-        Salvar_s3(df_client, CLIENT_CAMINHO) # Salva os dados do Cliente na S3
+        Salvar_s3(df_client_matheus, CLIENT_CAMINHO) # Salva os dados do Cliente na S3
 
         print("(LOADING) Convertendo Client para JSON e enviando para o site na EC2...")
 
-        # Converte DataFrame para Dicionário e salva como JSON formatado
-        dados_json = df_client.to_dict(orient='records')
+            # === ADICIONE ESTE BLOCO AQUI PARA CRIAR OS LIMITES DIRETO NA FUNÇÃO ===
+        resultados = buscar_medidas("NB1-luiz") # Busca direto do banco usando o nome correto do servidor
+        limites = {}
+        for linha in resultados:
+            limites[linha['nome_componente']] = float(linha['valor_max_critico'])
+        # ======================================================================
+        # Garante o formato de data e remove repetições dentro do mesmo minuto
+        # 1. Garante que a coluna de timestamp está no formato datetime do pandas
+        df_client_matheus['timestamp_dt'] = pd.to_datetime(df_client_matheus['timestamp'], format='%d-%m-%Y %H:%M:%S')
 
+        # 2. Cria uma coluna de texto temporária apenas com Ano-Mês-Dia Hora:Minuto
+        df_client_matheus['timestamp'] = df_client_matheus['timestamp_dt'].dt.strftime('%Y-%m-%d %H:%M')
 
-        
+        # 3. Remove duplicatas baseando-se nessa nova coluna de minutos
+        df_filtrado = df_client_matheus.drop_duplicates(subset=['timestamp'])
+
+        dados_json = []
+
+        # Mudamos aqui para ler do 'df_filtrado'
+        for _, linha in df_filtrado.iterrows():
+            registro = linha.to_dict()
+            
+            # Removemos a coluna auxiliar de datetime do json final para manter limpo
+            registro.pop('timestamp_dt', None)
+            
+            # 2. Injeta os limites dinamicamente para cada componente ativo
+            for componente, limite_critico in limites.items():
+                if componente in registro:
+                    registro[f"limite_{componente}"] = limite_critico
+                    
+            # 3. Filtra os nulos do registro atual e remove as chaves indesejadas
+            registro_limpo = {
+                chave: valor for chave, valor in registro.items()
+                if pd.notnull(valor) and chave != "processo_maior_consumo"
+            }
+            
+            # 4. Adiciona na lista final
+            dados_json.append(registro_limpo)
 
         # Salva no Note local (para debug/backup ou revisão)
-        with open('client.json', 'w') as f:
+        with open('matheus.json', 'w') as f:
             json.dump(dados_json, f, indent=4, default=str)
             # indent=4: JSON formatado (bonito)
             # default=str: converte tipos especiais (datetime) para string
 
-        print("(LOADING) Enviando o Json pro bucket")
+        print("(LOADING) Enviando o matheus.json pro bucket")
 
         # Aqui envia o JSON para o S3
-        with open('client.json', 'rb') as f:
+        with open('matheus.json', 'rb') as f:
             s3_client.put_object(Bucket=NOME_BUCKET,
-                                 Key='CLIENT/client.json',
+                                 Key='CLIENT/matheus.json',
                                  Body=f,
                                  ContentType='application/json')
         print("JSON enviado para o bucket com sucesso.")
@@ -207,9 +238,9 @@ def ETL():
             # Aqui você coloca o seu código que vai criar o arquivo separado
             # Arquivos do individuais no caso
 
-            #isa_individual
-         
+        print("Fim do individual Matheus")
 
+        #isa_individual
         df_trusted_isabela = df_raw.copy()
 
         df_trusted_isabela = df_trusted_isabela[
@@ -513,15 +544,13 @@ def ETL():
             )
                 
                 # ======================================================
-# Começo Gabriel Individual
+                # Começo Gabriel Individual
                 print('Individual do Apela Pato')
 
 
                 df_trusted_gabriel = df_raw.copy()
 
                 df_trusted_gabriel = df_trusted_gabriel[['id_servidor','fk_empresa','home_broker','cpu_percent', 'ram_total_gb', 'ram_used_gb', 'disk_percent', 'ram_percent', 'timestamp']]
-
-
 
                 print('Transformando os valores do csv em numerais')
 
@@ -578,12 +607,29 @@ def ETL():
         Salvar_s3(df_trusted_gabriel, "TRUSTED/gabriel_trusted.csv")
         pd.DataFrame(df_trusted_gabriel).to_csv("gabriel_trusted.csv", encoding="utf-8", sep=";", index=False)
         df_client_gabriel = df_trusted_gabriel.copy()
+        # # Garante o formato de data e remove repetições dentro do mesmo minuto
 
-        df_client_gabriel = df_client_gabriel.astype(object).where(pd.notnull(df_client_gabriel), None)
-        df_client_gabriel = df_client_gabriel.to_dict(orient="records")
+        # 1. Garante que a coluna de timestamp está no formato datetime do pandas
+        df_client_gabriel['timestamp_dt'] = pd.to_datetime(df_client_gabriel['timestamp'], format='%d-%m-%Y %H:%M:%S')
+
+        # 2. Cria uma coluna temporária APENAS para o critério do filtro (sem segundos)
+        df_client_gabriel['minuto_filtro'] = df_client_gabriel['timestamp_dt'].dt.strftime('%Y-%m-%d %H:%M')
+
+        # 3. Remove duplicatas baseando-se na coluna de minutos e gera o df_filtrado
+        df_filtrado = df_client_gabriel.drop_duplicates(subset=['minuto_filtro'])
+
+        # 3.5. Altera o formato para remover os segundos antes de apagar a coluna de apoio
+        df_filtrado['timestamp'] = df_filtrado['timestamp_dt'].dt.strftime('%d-%m-%Y %H:%M')
+
+        # 4. Remove as colunas auxiliares do df_filtrado para não irem para o JSON final
+        df_filtrado = df_filtrado.drop(columns=['timestamp_dt', 'minuto_filtro'], errors='ignore')
+
+        # 5. Converte o DF FILTRADO para dicionário (Garantindo que use o df_filtrado aqui)
+        dados_gabriel = df_filtrado.astype(object).where(pd.notnull(df_filtrado), None)
+        df_client_gabriel_dict = dados_gabriel.to_dict(orient="records")
 
         with open("gabriel.json", "w", encoding="utf-8") as f:
-                json.dump(df_client_gabriel, f, indent=4, default=str)
+                json.dump(df_client_gabriel_dict, f, indent=4, default=str)
 
         with open("gabriel.json", "rb") as f:
                 s3_client.put_object(
@@ -602,72 +648,72 @@ def ETL():
 
          # individual gabrielly
 
-        print("individual gabrielly")
-        # Busca os dados do Jira
-        print("inicio")
-        try:
-            resposta_mttr = requests.get("http://localhost:8080/api/mttr")
-            dados_mttr = resposta_mttr.json()
-            mttr_rapido = dados_mttr["maisRapido"]
-            mttr_lento  = dados_mttr["maisLento"]
-            print(f"MTTR mais rápido: {mttr_rapido}min | mais lento: {mttr_lento}min")
-        except:
-            mttr_rapido = 0
-            mttr_lento  = 0
-            print("Não foi possível buscar dados do Jira")
+#         print("individual gabrielly")
+#         # Busca os dados do Jira
+#         print("inicio")
+#         try:
+#             resposta_mttr = requests.get("http://localhost:8080/api/mttr")
+#             dados_mttr = resposta_mttr.json()
+#             mttr_rapido = dados_mttr["maisRapido"]
+#             mttr_lento  = dados_mttr["maisLento"]
+#             print(f"MTTR mais rápido: {mttr_rapido}min | mais lento: {mttr_lento}min")
+#         except:
+#             mttr_rapido = 0
+#             mttr_lento  = 0
+#             print("Não foi possível buscar dados do Jira")
 
-        try:
-            resposta_kpis = requests.get("http://localhost:8080/api/kpis")
-            dados_kpis = resposta_kpis.json()
-            incidentes_resolvidos = dados_kpis["incidentesResolvidos"]
-        except:
-            incidentes_resolvidos = 0
+#         try:
+#             resposta_kpis = requests.get("http://localhost:8080/api/kpis")
+#             dados_kpis = resposta_kpis.json()
+#             incidentes_resolvidos = dados_kpis["incidentesResolvidos"]
+#         except:
+#             incidentes_resolvidos = 0
 
-        try:
-            resposta_alertas = requests.get("http://localhost:8080/api/alertas-abertos")
-            dados_alertas = resposta_alertas.json()
-            alertas_abertos = dados_alertas["alertasAbertos"]
-        except:
-            alertas_abertos = 0
+#         try:
+#             resposta_alertas = requests.get("http://localhost:8080/api/alertas-abertos")
+#             dados_alertas = resposta_alertas.json()
+#             alertas_abertos = dados_alertas["alertasAbertos"]
+#         except:
+#             alertas_abertos = 0
 
-        try:
-            resposta_sla = requests.get("http://localhost:8080/api/sla")
-            dados_sla = resposta_sla.json()
-            taxa_sla = dados_sla["taxaSla"]
-        except:
-            taxa_sla = 0
+#         try:
+#             resposta_sla = requests.get("http://localhost:8080/api/sla")
+#             dados_sla = resposta_sla.json()
+#             taxa_sla = dados_sla["taxaSla"]
+#         except:
+#             taxa_sla = 0
 
-        try:
-            resposta_membros = requests.get("http://localhost:8080/api/membros")
-            dados_membros = resposta_membros.json()
-            membros = dados_membros["membros"]
-        except:
-            membros = []
+#         try:
+#             resposta_membros = requests.get("http://localhost:8080/api/membros")
+#             dados_membros = resposta_membros.json()
+#             membros = dados_membros["membros"]
+#         except:
+#             membros = []
 
-        dados_gabrielly = {
-            "timestamp": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
-            "incidentes_resolvidos": incidentes_resolvidos,
-            "alertas_abertos": alertas_abertos,
-            "taxa_sla": taxa_sla,
-            "mttr_mais_rapido_min": mttr_rapido,
-            "mttr_mais_lento_min": mttr_lento,
-            "membros": membros
-        }
+#         dados_gabrielly = {
+#             "timestamp": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
+#             "incidentes_resolvidos": incidentes_resolvidos,
+#             "alertas_abertos": alertas_abertos,
+#             "taxa_sla": taxa_sla,
+#             "mttr_mais_rapido_min": mttr_rapido,
+#             "mttr_mais_lento_min": mttr_lento,
+#             "membros": membros
+#         }
 
-        with open("gabrielly.json", "w", encoding="utf-8") as f:
-            json.dump(dados_gabrielly, f, indent=4, default=str)
+#         with open("gabrielly.json", "w", encoding="utf-8") as f:
+#             json.dump(dados_gabrielly, f, indent=4, default=str)
 
-        with open("gabrielly.json", "rb") as f:
-            s3_client.put_object(
-                Bucket=NOME_BUCKET,
-                Key="CLIENT/gabrielly.json",
-                Body=f,
-                ContentType="application/json"
-            )
+#         with open("gabrielly.json", "rb") as f:
+#             s3_client.put_object(
+#                 Bucket=NOME_BUCKET,
+#                 Key="CLIENT/gabrielly.json",
+#                 Body=f,
+#                 ContentType="application/json"
+#             )
 
 
-# Fim Gabrielly Individual
-# ======================================================
+# # Fim Gabrielly Individual
+# # ======================================================
 
         # Filtrando somente as colunas que eu quero pegar
         df_trusted_richard = df_raw[['id_servidor', 'home_broker', 'timestamp', 'latencia_resposta_ms', 'net_bytes_sent_gb', 'net_bytes_recv_gb', 'jitter_ms', 'packet_loss_percent', 'upload_mbps', 'download_mbps']].copy()

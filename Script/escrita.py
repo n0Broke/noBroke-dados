@@ -49,7 +49,7 @@ requisicoes = {
 
 config = {
     'user': "root",
-    'password':"Mywtty135790",
+    'password':"5",
     'host': "localhost",
     'database': "noBroke" 
 }
@@ -57,7 +57,7 @@ config = {
 fuso_brasil = pytz.timezone('America/Sao_Paulo')
 
 
-NAME_BUCKET = 'buckettestenobroke' #Vamos mudar pra um nome do projeto
+NAME_BUCKET = 'bucket.06-04-2026' #Vamos mudar pra um nome do projeto
 
 s3_client = boto3.client(
     's3',
@@ -121,7 +121,7 @@ def GerarRequisicao():
 
     return lista_requisicoes
 
-def buscar_fkEmpresa(nome_servidor,):
+def buscar_fkEmpresa(nome_servidor):
     try:
         conn = mysql.connector.connect(**config) # Tenta fazer uma conexão com as "**config" (credenciais) que demos
         cursor = conn.cursor(dictionary=True) # Cria um "executor" de comandos SQL
