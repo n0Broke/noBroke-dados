@@ -16,12 +16,12 @@ import numpy as np
 # Configurações pra se conectar com banco de Dados (credenciais aqui)
 config = {
     'user':"root",
-    'password':"5",
+    'password':"#Rich130407",
     'host':"localhost",
     'database':"noBroke" 
 }
 
-NOME_BUCKET = 'bucket.06-04-2026' # Nome do Bucket na sua S3
+NOME_BUCKET = 'amzn-s3-de-exemplo' # Nome do Bucket na sua S3
 RAW_CAMINHO = 'RAW/' # Caminho dentro do Bucket até a pasta da Camada 1
 TRUSTED_CAMINHO = 'TRUSTED/Trusted.csv' # Caminho pra criar o Arquivo Trusted (Camada 2)
 CLIENT_CAMINHO = 'CLIENT/Client.csv' # Caminho para criar o Arquivo Client (Camada 3)
@@ -451,6 +451,9 @@ def ETL():
                 "erro_503": erro_503,
                 "erro_504": erro_504,
                 "erro_505": erro_505,
+                # Adicionei linha de tipo_status, onde ela pega 
+                # o valor mais frequente (moda) da coluna tipo_status para aquela janela de 15 minutos, e se tiver vazia coloca None
+                "tipo_status": str(df_atual["tipo_status"].mode()[0]) if not df_atual["tipo_status"].empty else None,
             })
 
 
