@@ -16,7 +16,7 @@ import numpy as np
 # Configurações pra se conectar com banco de Dados (credenciais aqui)
 config = {
     'user':"root",
-    'password':"",
+    'password':"Mywtty135790",
     'host':"localhost",
     'database':"noBroke" 
 }
@@ -199,148 +199,231 @@ def ETL():
             # Arquivos do individuais no caso
 
             #isa_individual
+         
 
-        print("Entregavel da Isa")
         df_trusted_isabela = df_raw.copy()
 
-        df_trusted_isabela = df_trusted_isabela[['fk_empresa','id_servidor','home_broker','timestamp','metodo','endpoint','status_code','latencia_ms']]
+        df_trusted_isabela = df_trusted_isabela[
+            [
+                'fk_empresa',
+                'id_servidor',
+                'home_broker',
+                'timestamp',
+                'metodo',
+                'endpoint',
+                'status_code',
+                'latencia_ms'
+            ]
+        ]
 
-        df_trusted_isabela["categoria"] = df_trusted_isabela["endpoint"].fillna("").apply(classificar_categoria)
+        df_trusted_isabela["categoria"] = (
+            df_trusted_isabela["endpoint"]
+            .fillna("")
+            .apply(classificar_categoria)
+        )
 
-        pd.DataFrame(df_trusted_isabela).to_csv("isa_trusted.csv", encoding="utf-8", sep=";", index=False)
-        print("Consegui acessar o classifica_categoria")
+        df_trusted_isabela["tipo_status"] = (
+            df_trusted_isabela["status_code"]
+            .fillna(0)
+            .astype(int)
+            .apply(classificar_status)
+        )
 
-
-        df_trusted_isabela["tipo_status"] = df_trusted_isabela["status_code"].fillna(0).astype(int).apply(classificar_status)
+        pd.DataFrame(df_trusted_isabela).to_csv(
+            "isa_trusted.csv",
+            encoding="utf-8",
+            sep=";",
+            index=False
+        )
 
         Salvar_s3(df_trusted_isabela, "TRUSTED/isa.csv")
-        print("Enviado para o bucket o trusted da isabela")
 
+        print("Trusted da Isabela enviado")
         df_client_isabela = df_trusted_isabela.copy()
-        df_client_isabela["timestamp"] = pd.to_datetime(df_client_isabela["timestamp"], dayfirst=True, errors="coerce")
-        
+
+        df_client_isabela["timestamp"] = pd.to_datetime(
+            df_client_isabela["timestamp"],
+            dayfirst=True,
+            errors="coerce"
+        )
+
         df_client_isabela = df_client_isabela.sort_values("timestamp")
 
         df_client_isabela["janela_15min"] = df_client_isabela["timestamp"].dt.floor("15min")
 
         janelas = sorted(df_client_isabela["janela_15min"].dropna().unique())
 
-        if len(janelas) >= 2:
-            janela_atual = janelas[-1]
-            janela_anterior = janelas[-2]
+        dados_dashboard = []
 
-            df_atual = df_client_isabela[df_client_isabela["janela_15min"] == janela_atual]
-            df_anterior = df_client_isabela[df_client_isabela["janela_15min"] == janela_anterior]
+        for i in range(len(janelas)):
 
-        else:
-            df_atual = df_client_isabela
-            df_anterior = df_client_isabela.iloc[0:0]
+            janela_atual = janelas[i]
 
-        print("Janela atual:", df_atual["janela_15min"].unique())
-        print("Janela anterior:", df_anterior["janela_15min"].unique())
-        print("Linhas atual:", len(df_atual))
-        print("Linhas anterior:", len(df_anterior))
+            df_atual = df_client_isabela[
+                df_client_isabela["janela_15min"] == janela_atual
+            ]
 
-        # Agora sim define os contadores
-        contador_ordens = (df_client_isabela["categoria"] == "ordens").sum()
-        contador_volume = len(df_client_isabela)
-        contador_atual = len(df_atual)
-        contador_anterior = len(df_anterior)
+            if i > 0:
+                janela_anterior = janelas[i - 1]
 
-        contador_sucesso_atual = len(df_atual[(df_atual["categoria"] == "ordens") & (df_atual["tipo_status"] == "sucesso")])
-        contador_sucesso_anterior = len(df_anterior[df_anterior["tipo_status"] == "sucesso"])
-        
-        contador_5xx = len(df_client_isabela[(df_client_isabela["status_code"] >= 500) & (df_client_isabela["status_code"] <= 507)])
+                df_anterior = df_client_isabela[
+                    df_client_isabela["janela_15min"] == janela_anterior
+                ]
+            else:
+                df_anterior = df_client_isabela.iloc[0:0]
 
-        contador_5xx_atual = len(df_atual[(df_atual["status_code"] >= 500) & (df_atual["status_code"] <= 507)])
-        contador_5xx_anterior = len(df_anterior[(df_anterior["status_code"] >= 500) & (df_anterior["status_code"] <= 507)])
+            total_volume = len(df_atual)
+            total_volume_anterior = len(df_anterior)
 
-        porcentagem_volume = variacao_percentual(contador_atual, contador_anterior)
+            variacao_volume = variacao_percentual(
+                total_volume,
+                total_volume_anterior
+            )
 
-        porcentagem_sucesso_atual = porcentagem(contador_sucesso_atual, contador_atual)
-        porcentagem_sucesso_anterior = porcentagem(contador_sucesso_anterior, contador_anterior)
-        variacao_sucesso = variacao_percentual(porcentagem_sucesso_atual, porcentagem_sucesso_anterior)
+            ordens_atual = df_atual[
+                df_atual["categoria"] == "ordens"
+            ]
 
-        porcentagem_5xx_atual = porcentagem(contador_5xx_atual, contador_atual)
-        porcentagem_5xx_anterior = porcentagem(contador_5xx_anterior, contador_anterior)
-        variacao_5xx = variacao_percentual(porcentagem_5xx_atual, porcentagem_5xx_anterior)
+            ordens_anterior = df_anterior[
+                df_anterior["categoria"] == "ordens"
+            ]
 
-        latencias_atuais = df_atual[df_atual["categoria"] == "ordens"]["latencia_ms"].dropna().tolist()
+            total_ordens = len(ordens_atual)
 
-        latencias_anteriores = df_anterior[df_anterior["categoria"] == "ordens"]["latencia_ms"].dropna().tolist()
+            total_sucesso_ordens = len(
+                ordens_atual[ordens_atual["tipo_status"] == "sucesso"]
+            )
 
-        if len(latencias_atuais) > 0:
-            p95_atual = np.percentile(latencias_atuais, 95)
-        else:
-            p95_atual = 0
+            total_sucesso_ordens_anterior = len(
+                ordens_anterior[ordens_anterior["tipo_status"] == "sucesso"]
+            )
 
-        if len(latencias_anteriores) > 0:
-            p95_anterior = np.percentile(latencias_anteriores, 95)
-        else:
-            p95_anterior = 0
+            porcentagem_sucesso_ordens = porcentagem(
+                total_sucesso_ordens,
+                total_ordens
+            )
 
-        variacao_p95 = variacao_percentual(
-        p95_atual,
-        p95_anterior)
-        
-        porcentagem_ordens = porcentagem(contador_ordens, contador_volume)
+            porcentagem_sucesso_ordens_anterior = porcentagem(
+                total_sucesso_ordens_anterior,
+                len(ordens_anterior)
+            )
 
-        total_sucesso_ordens = len(
-        df_client_isabela[(df_client_isabela["categoria"] == "ordens") & (df_client_isabela["tipo_status"] == "sucesso")])
+            variacao_sucesso = variacao_percentual(
+                porcentagem_sucesso_ordens,
+                porcentagem_sucesso_ordens_anterior
+            )
 
-        porcentagem_sucesso_ordens = porcentagem(total_sucesso_ordens,contador_ordens)
+            latencias_ordens = ordens_atual["latencia_ms"].dropna().tolist()
+            latencias_ordens_anterior = ordens_anterior["latencia_ms"].dropna().tolist()
 
-        latencias_ordens = df_client_isabela[df_client_isabela["categoria"] == "ordens"]["latencia_ms"].dropna().tolist()
+            if len(latencias_ordens) > 0:
+                latencia_p95_ordens = round(np.percentile(latencias_ordens, 95), 2)
+            else:
+                latencia_p95_ordens = 0
 
-        if len(latencias_ordens) > 0:
-            latencia_p95_ordens = round(np.percentile(latencias_ordens, 95), 2)
-        else:
-            latencia_p95_ordens = 0
+            if len(latencias_ordens_anterior) > 0:
+                latencia_p95_ordens_anterior = round(np.percentile(latencias_ordens_anterior, 95), 2)
+            else:
+                latencia_p95_ordens_anterior = 0
 
-        df_client_isabela["total_ordens"] = contador_ordens
-        df_client_isabela["total_sucesso_ordens"] = total_sucesso_ordens
-        df_client_isabela["porcentagem_sucesso_ordens"] = porcentagem_sucesso_ordens
-        df_client_isabela["latencia_p95_ordens"] = latencia_p95_ordens
-        df_client_isabela["variacao_latencia_p95"] = variacao_p95
-        df_client_isabela["porcentagem_ordens"] = porcentagem_ordens
-        df_client_isabela["total_volume"] = contador_volume
-        df_client_isabela["variacao_volume"] = porcentagem_volume
-        df_client_isabela["variacao_sucesso"] = variacao_sucesso
-        df_client_isabela["contador_5xx"] = contador_5xx
-        df_client_isabela["variacao_5xx"] = variacao_5xx
+            variacao_latencia_p95 = variacao_percentual(
+                latencia_p95_ordens,
+                latencia_p95_ordens_anterior
+            )
 
-        df_client_isabela = df_client_isabela.drop(columns=["janela_15min"], errors="ignore")
+            contador_5xx = len(
+                df_atual[
+                    (df_atual["status_code"] >= 500) &
+                    (df_atual["status_code"] <= 507)
+                ]
+            )
 
-        df_client_isabela = df_client_isabela.astype(object).where(pd.notnull(df_client_isabela), None)
+            contador_5xx_anterior = len(
+                df_anterior[
+                    (df_anterior["status_code"] >= 500) &
+                    (df_anterior["status_code"] <= 507)
+                ]
+            )
 
-        dados_isabela_json = df_client_isabela.to_dict(orient="records")
-        
+            porcentagem_5xx_atual = porcentagem(
+                contador_5xx,
+                total_volume
+            )
+
+            porcentagem_5xx_anterior = porcentagem(
+                contador_5xx_anterior,
+                total_volume_anterior
+            )
+
+            variacao_5xx = variacao_percentual(
+                porcentagem_5xx_atual,
+                porcentagem_5xx_anterior
+            )
+
+            porcentagem_ordens = porcentagem(
+                total_ordens,
+                total_volume
+            )
+
+            qtd_sucesso = len(df_atual[df_atual["tipo_status"] == "sucesso"])
+            qtd_erro_cliente = len(df_atual[df_atual["tipo_status"] == "erro_cliente"])
+            qtd_erro_servidor = len(df_atual[df_atual["tipo_status"] == "erro_servidor"])
+            qtd_sucesso = len(ordens_atual[ordens_atual["tipo_status"] == "sucesso"])
+            qtd_erro_cliente = len(ordens_atual[ordens_atual["tipo_status"] == "erro_cliente"])
+            qtd_erro_servidor = len(ordens_atual[ordens_atual["tipo_status"] == "erro_servidor"])
+
+            erro_500 = len(df_atual[df_atual["status_code"] == 500])
+            erro_501 = len(df_atual[df_atual["status_code"] == 501])
+            erro_502 = len(df_atual[df_atual["status_code"] == 502])
+            erro_503 = len(df_atual[df_atual["status_code"] == 503])
+            erro_504 = len(df_atual[df_atual["status_code"] == 504])
+            erro_505 = len(df_atual[df_atual["status_code"] == 505])
+
+            dados_dashboard.append({
+                "fk_empresa": 2,
+                "id_servidor": 3,
+                "home_broker": "SRV-DTIC-PROD",
+                "timestamp": str(janela_atual),
+
+                "total_volume": total_volume,
+                "variacao_volume": variacao_volume,
+
+                "total_ordens": total_ordens,
+                "total_sucesso_ordens": total_sucesso_ordens,
+                "porcentagem_sucesso_ordens": porcentagem_sucesso_ordens,
+                "variacao_sucesso": variacao_sucesso,
+
+                "latencia_p95_ordens": latencia_p95_ordens,
+                "variacao_latencia_p95": variacao_latencia_p95,
+
+                "porcentagem_ordens": porcentagem_ordens,
+
+                "contador_5xx": contador_5xx,
+                "variacao_5xx": variacao_5xx,
+
+                "qtd_sucesso": qtd_sucesso,
+                "qtd_erro_cliente": qtd_erro_cliente,
+                "qtd_erro_servidor": qtd_erro_servidor,
+
+                "erro_500": erro_500,
+                "erro_501": erro_501,
+                "erro_502": erro_502,
+                "erro_503": erro_503,
+                "erro_504": erro_504,
+                "erro_505": erro_505,
+            })
+
+
         with open("isa.json", "w", encoding="utf-8") as f:
-                json.dump(dados_isabela_json, f, indent=4, default=str)
+            json.dump(dados_dashboard, f, indent=4, default=str)
 
         with open("isa.json", "rb") as f:
-                s3_client.put_object(
+            s3_client.put_object(
                 Bucket=NOME_BUCKET,
                 Key="CLIENT/isa.json",
                 Body=f,
                 ContentType="application/json"
             )
-                
-
-                print("Linhas atual:", len(df_atual))
-                print("Linhas anterior:", len(df_anterior))
-
-                print("contador_atual:", contador_atual)
-                print("contador_anterior:", contador_anterior)
-
-                print("p95_atual:", p95_atual)
-                print("p95_anterior:", p95_anterior)
-
-                print("5xx atual:", contador_5xx_atual)
-                print("5xx anterior:", contador_5xx_anterior)
-
-                print("sucesso atual:", porcentagem_sucesso_atual)
-                print("sucesso anterior:", porcentagem_sucesso_anterior)
         
             #Fim isa individual
             # ======================================================
@@ -400,7 +483,7 @@ def ETL():
 
 
         print("(LOADING) Enviando o luiz_trusted csv pro bucket")
-        Salvar_s3(df_trusted_isabela, "TRUSTED/luiz_trusted.csv")
+        Salvar_s3(df_trusted_isabela, "TRUSTED/isabela_trusted.csv")
         pd.DataFrame(df_trusted_luiz).to_csv("luiz_trusted.csv", encoding="utf-8", sep=";", index=False)
         
         df_client_luiz = df_trusted_luiz.copy()

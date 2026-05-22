@@ -1,8 +1,0 @@
-pandas
-boto3
-botocore
-requests
-mysql-connector-python
-psutil
-pytz
-pyfiglet
