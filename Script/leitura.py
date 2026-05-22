@@ -596,6 +596,79 @@ def ETL():
         print("(LOADING) Iniciando tratamento de rede...")
 
         # 1. Fazendo Trusted (Camada 2)
+
+        
+                # ===============================================================
+
+         # individual gabrielly
+
+        print("individual gabrielly")
+        # Busca os dados do Jira
+        print("inicio")
+        try:
+            resposta_mttr = requests.get("http://localhost:8080/api/mttr")
+            dados_mttr = resposta_mttr.json()
+            mttr_rapido = dados_mttr["maisRapido"]
+            mttr_lento  = dados_mttr["maisLento"]
+            print(f"MTTR mais rápido: {mttr_rapido}min | mais lento: {mttr_lento}min")
+        except:
+            mttr_rapido = 0
+            mttr_lento  = 0
+            print("Não foi possível buscar dados do Jira")
+
+        try:
+            resposta_kpis = requests.get("http://localhost:8080/api/kpis")
+            dados_kpis = resposta_kpis.json()
+            incidentes_resolvidos = dados_kpis["incidentesResolvidos"]
+        except:
+            incidentes_resolvidos = 0
+
+        try:
+            resposta_alertas = requests.get("http://localhost:8080/api/alertas-abertos")
+            dados_alertas = resposta_alertas.json()
+            alertas_abertos = dados_alertas["alertasAbertos"]
+        except:
+            alertas_abertos = 0
+
+        try:
+            resposta_sla = requests.get("http://localhost:8080/api/sla")
+            dados_sla = resposta_sla.json()
+            taxa_sla = dados_sla["taxaSla"]
+        except:
+            taxa_sla = 0
+
+        try:
+            resposta_membros = requests.get("http://localhost:8080/api/membros")
+            dados_membros = resposta_membros.json()
+            membros = dados_membros["membros"]
+        except:
+            membros = []
+
+        dados_gabrielly = {
+            "timestamp": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
+            "incidentes_resolvidos": incidentes_resolvidos,
+            "alertas_abertos": alertas_abertos,
+            "taxa_sla": taxa_sla,
+            "mttr_mais_rapido_min": mttr_rapido,
+            "mttr_mais_lento_min": mttr_lento,
+            "membros": membros
+        }
+
+        with open("gabrielly.json", "w", encoding="utf-8") as f:
+            json.dump(dados_gabrielly, f, indent=4, default=str)
+
+        with open("gabrielly.json", "rb") as f:
+            s3_client.put_object(
+                Bucket=NOME_BUCKET,
+                Key="CLIENT/gabrielly.json",
+                Body=f,
+                ContentType="application/json"
+            )
+
+
+# Fim Gabrielly Individual
+# ======================================================
+
         # Filtrando somente as colunas que eu quero pegar
         df_trusted_richard = df_raw[['id_servidor', 'home_broker', 'timestamp', 'latencia_resposta_ms', 'net_bytes_sent_gb', 'net_bytes_recv_gb', 'jitter_ms', 'packet_loss_percent', 'upload_mbps', 'download_mbps']].copy()
 
