@@ -41,8 +41,12 @@ s3_client = boto3.client(
 # Função de Buscar medidas e Componentes no banco de dados, ela:
 # 1. Quais os Componentes tem daquele servidor que fez a requisição
 # 2. Quais as Unidades de medida ele colocou pra ser lá
+
+
+a = None
 def buscar_medidas(nome_servidor):
     try:
+        a = nome_servidor
         print(f"Buscando Medidas do Banco de Dados para: {nome_servidor}")
         conn = mysql.connector.connect(**config) # Tenta fazer uma conexão com as "**config" (credenciais) que demos
         cursor = conn.cursor(dictionary=True) # Cria um "executor" de comandos SQL
@@ -51,12 +55,15 @@ def buscar_medidas(nome_servidor):
         query = """
             SELECT 
                 tipo.nome_componente, 
-                formato.unidade_medida 
+                formato.unidade_medida,
+                tipo.valor_max_critico 
             FROM tipo_componente tipo
             JOIN servidor ON tipo.fk_servidor = servidor.id_servidor
             JOIN formato ON tipo.fk_formato = formato.id_formato
             WHERE servidor.nome = %s;
         """
+
+        
 
         # Realiza a função de conexão passando a query (oque é pra buscar) e o nome do servidor que fica no %s
         cursor.execute(query, (nome_servidor,))
@@ -65,7 +72,9 @@ def buscar_medidas(nome_servidor):
         # Fecha a conexão e retorna o que achou de maneira bruta
         cursor.close()
         conn.close()
+        
         return resultados
+        print(f"O componente {componente} tem o valor crítico de: {valor_critico}")
     except Exception as e:
         # Se der erro na conexão mostra no terminal e retorna tabela vazia
         print(f"Erro ao consultar banco de dados: {e}")
@@ -504,45 +513,66 @@ def ETL():
             )
                 
                 # ======================================================
-        # Começo Gabriel Individual
-        print('Individual do Apela Pato')
+# Começo Gabriel Individual
+                print('Individual do Apela Pato')
 
 
-        df_trusted_gabriel = df_raw.copy()
+                df_trusted_gabriel = df_raw.copy()
 
-        df_trusted_gabriel = df_trusted_gabriel[['id_servidor','fk_empresa','home_broker','cpu_percent', 'ram_total_gb', 'ram_used_gb', 'disk_percent', 'ram_percent', 'timestamp']]
+                df_trusted_gabriel = df_trusted_gabriel[['id_servidor','fk_empresa','home_broker','cpu_percent', 'ram_total_gb', 'ram_used_gb', 'disk_percent', 'ram_percent', 'timestamp']]
 
 
 
-        print('Transformando os valores do csv em numerais')
+                print('Transformando os valores do csv em numerais')
 
-        df_trusted_gabriel['timestamp'] = pd.to_datetime(df_trusted_gabriel['timestamp'], dayfirst=True, errors='coerce')
-        df_trusted_gabriel = df_trusted_gabriel.sort_values(by=['home_broker', 'timestamp']).reset_index(drop=True)
-        df_trusted_gabriel['ram_total_gb'] = pd.to_numeric(df_trusted_gabriel['ram_total_gb'], errors='coerce')
-        df_trusted_gabriel['ram_percent'] = pd.to_numeric(df_trusted_gabriel['ram_percent'], errors='coerce')
-        df_trusted_gabriel['ram_used_gb'] = pd.to_numeric(df_trusted_gabriel['ram_used_gb'], errors='coerce')
-        df_trusted_gabriel['disk_percent'] = pd.to_numeric(df_trusted_gabriel['disk_percent'], errors='coerce')
-        df_trusted_gabriel['cpu_percent'] = pd.to_numeric(df_trusted_gabriel['cpu_percent'], errors='coerce')
+                df_trusted_gabriel['timestamp'] = pd.to_datetime(df_trusted_gabriel['timestamp'], dayfirst=True, errors='coerce')
+                df_trusted_gabriel = df_trusted_gabriel.sort_values(by=['home_broker', 'timestamp']).reset_index(drop=True)
+                df_trusted_gabriel['ram_total_gb'] = pd.to_numeric(df_trusted_gabriel['ram_total_gb'], errors='coerce')
+                df_trusted_gabriel['ram_percent'] = pd.to_numeric(df_trusted_gabriel['ram_percent'], errors='coerce')
+                df_trusted_gabriel['ram_used_gb'] = pd.to_numeric(df_trusted_gabriel['ram_used_gb'], errors='coerce')
+                df_trusted_gabriel['disk_percent'] = pd.to_numeric(df_trusted_gabriel['disk_percent'], errors='coerce')
+                df_trusted_gabriel['cpu_percent'] = pd.to_numeric(df_trusted_gabriel['cpu_percent'], errors='coerce')
 
-        horas_registro = []
-        cpu = []
-        ram_used = []
-        ram_total = []
-        disk = []
-        ram_percent = []
-        servidor_atual = []
+                horas_registro = []
+                cpu = []
+                ram_used = []
+                ram_total = []
+                disk = []
+                ram_percent = []
+                servidor_atual = []
+                status = []
+
+                for i in range(len(df_trusted_gabriel)):
+                    servidor_atual.append(df_trusted_gabriel.loc[i, 'home_broker'])
+                    horas_registro.append(df_trusted_gabriel.loc[i, 'timestamp'])
+                    ram_percent.append(df_trusted_gabriel.loc[i, 'ram_percent'])
+                    cpu.append(df_trusted_gabriel.loc[i,'cpu_percent'])
+                    ram_used.append(df_trusted_gabriel.loc[i, 'ram_used_gb'])
+                    disk.append(df_trusted_gabriel.loc[i,'disk_percent'])
+                    ram_total.append(df_trusted_gabriel.loc[i,'ram_total_gb'])
+        resultados = buscar_medidas(a)
+        print("Chamou com o nome certo ", a)
+        limites = {}
+        for linha in resultados:
+                limites[linha['nome_componente']] = double(linha['valor_max_critico'])
 
 
         for i in range(len(df_trusted_gabriel)):
-            servidor_atual.append(df_trusted_gabriel.loc[i, 'home_broker'])
-            horas_registro.append(df_trusted_gabriel.loc[i, 'timestamp'])
-            ram_percent.append(df_trusted_gabriel.loc[i, 'ram_percent'])
-            cpu.append(df_trusted_gabriel.loc[i,'cpu_percent'])
-            ram_used.append(df_trusted_gabriel.loc[i, 'ram_used_gb'])
-            disk.append(df_trusted_gabriel.loc[i,'disk_percent'])
-            ram_total.append(df_trusted_gabriel.loc[i,'ram_total_gb'])
-
-
+                    status_linha = "Normal"
+                    if 'cpu_percent' in limites:
+                        if limites['cpu_percent'] < cpu[i]:
+                            status_linha = "Crítico"
+                    if 'ram_percent' in limites:
+                     if limites['ram_percent'] < ram_percent[i]:
+                            status_linha = "Crítico"
+                    if 'ram_used_gb' in limites:
+                        if limites['ram_used_gb'] < (ram_total[i] - ram_used[i]):
+                            status_linha = "Crítico"
+                    if 'disk_percent' in limites:
+                        if limites['disk_percent'] < disk[i]:
+                            status_linha = "Crítico"
+                    status.append(status_linha)
+        df_trusted_gabriel['status'] = status
 
         print("(LOADING) Enviando o gabriel_trusted csv pro bucket")
         Salvar_s3(df_trusted_gabriel, "TRUSTED/gabriel_trusted.csv")
@@ -553,17 +583,15 @@ def ETL():
         df_client_gabriel = df_client_gabriel.to_dict(orient="records")
 
         with open("gabriel.json", "w", encoding="utf-8") as f:
-            json.dump(df_client_gabriel, f, indent=4, default=str)
+                json.dump(df_client_gabriel, f, indent=4, default=str)
 
         with open("gabriel.json", "rb") as f:
-            s3_client.put_object(
-            Bucket=NOME_BUCKET,
-            Key="CLIENT/gabriel.json",
-            Body=f,
-            ContentType="application/json"
-            )
-        # ===============================================================
-        # Começo richard individual
+                s3_client.put_object(
+                Bucket=NOME_BUCKET,
+                Key="CLIENT/gabriel.json",
+                Body=f,
+                ContentType="application/json"
+                )
 
         print("(LOADING) Iniciando tratamento de rede...")
 
