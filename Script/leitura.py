@@ -16,12 +16,12 @@ import numpy as np
 # Configurações pra se conectar com banco de Dados (credenciais aqui)
 config = {
     'user':"root",
-    'password':"#Rich130407",
+    'password':"pepe@2011",
     'host':"localhost",
     'database':"noBroke" 
 }
 
-NOME_BUCKET = 'amzn-s3-de-exemplo' # Nome do Bucket na sua S3
+NOME_BUCKET = 'buckettestenobroke' # Nome do Bucket na sua S3
 RAW_CAMINHO = 'RAW/' # Caminho dentro do Bucket até a pasta da Camada 1
 TRUSTED_CAMINHO = 'TRUSTED/Trusted.csv' # Caminho pra criar o Arquivo Trusted (Camada 2)
 CLIENT_CAMINHO = 'CLIENT/Client.csv' # Caminho para criar o Arquivo Client (Camada 3)
@@ -474,23 +474,28 @@ def ETL():
         print('Individual Luiz')
 
         df_trusted_luiz = df_raw.copy()
-
         df_trusted_luiz = df_trusted_luiz[['id_servidor','fk_empresa','home_broker','timestamp','ram_percent','swap_percent']]
 
-        # transformar tudo em float para conseguir fazer as operações matemáticas.
-
         print('Transformando os valores do csv em numerais')
-
         df_trusted_luiz['timestamp'] = pd.to_datetime(df_trusted_luiz['timestamp'], dayfirst=True, errors='coerce')
+        
+        # CORREÇÃO 1: Remover duplicidades temporais exatas que travam o desvio padrão em zero
+        df_trusted_luiz = df_trusted_luiz.drop_duplicates(subset=['home_broker', 'timestamp'])
         df_trusted_luiz = df_trusted_luiz.sort_values(by=['home_broker', 'timestamp']).reset_index(drop=True)
+        
         df_trusted_luiz['ram_percent'] = pd.to_numeric(df_trusted_luiz['ram_percent'], errors='coerce')
         df_trusted_luiz['swap_percent'] = pd.to_numeric(df_trusted_luiz['swap_percent'], errors='coerce')
 
         correlacoes = []
         tendencias_minuto = []
+        tendencia_hora = []
         horas_registro = []
         etas = []
         projeções_futuras = []
+
+        # Listas para guardar as contagens das faixas
+        faixas_nomes = ['ram_10_20', 'ram_20_30', 'ram_30_40', 'ram_40_50', 'ram_50_60', 'ram_60_70', 'ram_70_80', 'ram_80_90', 'ram_90_100']
+        historico_faixas = {nome: [] for nome in faixas_nomes}
 
         janela_previsao = 24
 
@@ -504,77 +509,94 @@ def ETL():
                   (df_trusted_luiz['timestamp'] <= horario_registro)
              ].tail(janela_previsao)
              
-             horas_registro.append(horario_registro.strftime('%H:%M:%S')if pd.notnull(horario_registro) else None)
+             horas_registro.append(horario_registro.strftime('%H:%M:%S') if pd.notnull(horario_registro) else None)
              
+             # Cálculos estatísticos
              correlacao = calcular_correcao_movel(df_luiz)
              taxa_minuto = calcular_tendencia_ram(df_luiz)
+             taxa_hora = calcular_tendencia_ram_hora(taxa_minuto)
              eta = calcular_eta_ram(ram_registro, taxa_minuto)
              predicoes = calcular_projeções_futuras(ram_registro, taxa_minuto, df_luiz)
 
              correlacoes.append(correlacao)
              tendencias_minuto.append(taxa_minuto)
+             tendencia_hora.append(taxa_hora)
              etas.append(eta)
              projeções_futuras.append(predicoes)
 
+             # SOLUÇÃO 2: Contagem de ocorrências por intervalo na janela móvel (últimos 24)
+             # Definindo os limites (bins) e labels das faixas de 10% em 10%
+             bins = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+             
+             # Conta as ocorrências de RAM na janela atual usando pd.cut
+             contagem_janela = pd.cut(df_luiz['ram_percent'], bins=bins, labels=faixas_nomes, right=True).value_counts()
+             
+             # Armazena os resultados para cada coluna correspondente
+             for faixa in faixas_nomes:
+                 historico_faixas[faixa].append(int(contagem_janela.get(faixa, 0)))
+
+        # Inserindo os vetores calculados de volta ao DataFrame de Confiança
         df_trusted_luiz['correlacao_ram_swap'] = correlacoes
         df_trusted_luiz['tendencia_ram_por_minuto'] = tendencias_minuto
+        df_trusted_luiz['tendencia_ram_por_hora'] = tendencia_hora
         df_trusted_luiz['hora_registro'] = horas_registro
         df_trusted_luiz['ETA'] = etas
+
+        # Adicionando as colunas de contagem ao DataFrame
+        for faixa in faixas_nomes:
+            df_trusted_luiz[faixa] = historico_faixas[faixa]
 
         df_projeções = pd.DataFrame(projeções_futuras, columns=['proj1', 'proj2', 'proj3', 'proj4', 'proj5'])
         df_trusted_luiz = pd.concat([df_trusted_luiz, df_projeções], axis=1)
 
-
         print("(LOADING) Enviando o luiz_trusted csv pro bucket")
-        Salvar_s3(df_trusted_isabela, "TRUSTED/isabela_trusted.csv")
+        # Mantendo as suas funções originais de envio
+        Salvar_s3(df_trusted_luiz, "TRUSTED/luiz_trusted.csv")
         pd.DataFrame(df_trusted_luiz).to_csv("luiz_trusted.csv", encoding="utf-8", sep=";", index=False)
         
         df_client_luiz = df_trusted_luiz.copy()
-
         df_client_luiz = df_client_luiz.astype(object).where(pd.notnull(df_client_luiz), None)
-        
         df_client_luiz = df_client_luiz.to_dict(orient="records")
 
         with open("luiz.json", "w", encoding="utf-8") as f:
-                json.dump(df_client_luiz, f, indent=4, default=str)
+             json.dump(df_client_luiz, f, indent=4, default=str)
 
         with open("luiz.json", "rb") as f:
-                s3_client.put_object(
-                Bucket=NOME_BUCKET,
-                Key="CLIENT/luiz.json",
-                Body=f,
-                ContentType="application/json"
-            )
-                
+             s3_client.put_object(
+                 Bucket=NOME_BUCKET,
+                 Key="CLIENT/luiz.json",
+                 Body=f,
+                 ContentType="application/json"
+             )          
                 # ======================================================
                 # Começo Gabriel Individual
-                print('Individual do Apela Pato')
+        print('Individual do Apela Pato')
 
 
-                df_trusted_gabriel = df_raw.copy()
+        df_trusted_gabriel = df_raw.copy()
 
-                df_trusted_gabriel = df_trusted_gabriel[['id_servidor','fk_empresa','home_broker','cpu_percent', 'ram_total_gb', 'ram_used_gb', 'disk_percent', 'ram_percent', 'timestamp']]
+        df_trusted_gabriel = df_trusted_gabriel[['id_servidor','fk_empresa','home_broker','cpu_percent', 'ram_total_gb', 'ram_used_gb', 'disk_percent', 'ram_percent', 'timestamp']]
 
-                print('Transformando os valores do csv em numerais')
+        print('Transformando os valores do csv em numerais')
 
-                df_trusted_gabriel['timestamp'] = pd.to_datetime(df_trusted_gabriel['timestamp'], dayfirst=True, errors='coerce')
-                df_trusted_gabriel = df_trusted_gabriel.sort_values(by=['home_broker', 'timestamp']).reset_index(drop=True)
-                df_trusted_gabriel['ram_total_gb'] = pd.to_numeric(df_trusted_gabriel['ram_total_gb'], errors='coerce')
-                df_trusted_gabriel['ram_percent'] = pd.to_numeric(df_trusted_gabriel['ram_percent'], errors='coerce')
-                df_trusted_gabriel['ram_used_gb'] = pd.to_numeric(df_trusted_gabriel['ram_used_gb'], errors='coerce')
-                df_trusted_gabriel['disk_percent'] = pd.to_numeric(df_trusted_gabriel['disk_percent'], errors='coerce')
-                df_trusted_gabriel['cpu_percent'] = pd.to_numeric(df_trusted_gabriel['cpu_percent'], errors='coerce')
+        df_trusted_gabriel['timestamp'] = pd.to_datetime(df_trusted_gabriel['timestamp'], dayfirst=True, errors='coerce')
+        df_trusted_gabriel = df_trusted_gabriel.sort_values(by=['home_broker', 'timestamp']).reset_index(drop=True)
+        df_trusted_gabriel['ram_total_gb'] = pd.to_numeric(df_trusted_gabriel['ram_total_gb'], errors='coerce')
+        df_trusted_gabriel['ram_percent'] = pd.to_numeric(df_trusted_gabriel['ram_percent'], errors='coerce')
+        df_trusted_gabriel['ram_used_gb'] = pd.to_numeric(df_trusted_gabriel['ram_used_gb'], errors='coerce')
+        df_trusted_gabriel['disk_percent'] = pd.to_numeric(df_trusted_gabriel['disk_percent'], errors='coerce')
+        df_trusted_gabriel['cpu_percent'] = pd.to_numeric(df_trusted_gabriel['cpu_percent'], errors='coerce')
 
-                horas_registro = []
-                cpu = []
-                ram_used = []
-                ram_total = []
-                disk = []
-                ram_percent = []
-                servidor_atual = []
-                status = []
+        horas_registro = []
+        cpu = []
+        ram_used = []
+        ram_total = []
+        disk = []
+        ram_percent = []
+        servidor_atual = []
+        status = []
 
-                for i in range(len(df_trusted_gabriel)):
+        for i in range(len(df_trusted_gabriel)):
                     servidor_atual.append(df_trusted_gabriel.loc[i, 'home_broker'])
                     horas_registro.append(df_trusted_gabriel.loc[i, 'timestamp'])
                     ram_percent.append(df_trusted_gabriel.loc[i, 'ram_percent'])
@@ -884,6 +906,11 @@ def calcular_projeções_futuras(ram_atual, taxa_minuto, df_luiz):
         proximos_passos.append(predicao)
         
     return proximos_passos
+
+def calcular_tendencia_ram_hora(taxa_minuto):
+     taxa_hora = taxa_minuto*60
+
+     return taxa_hora
 
 def variacao_percentual(atual, anterior):
     if anterior == 0:

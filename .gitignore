@@ -217,3 +217,7 @@ __marimo__/
 
 # Chave pem
 *.pem
+
+# extensões de arquivos
+*.json
+*.csv
