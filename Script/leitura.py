@@ -16,7 +16,7 @@ import numpy as np
 # Configurações pra se conectar com banco de Dados (credenciais aqui)
 config = {
     'user':"root",
-    'password':"pepe@2011",
+    'password':"5",
     'host':"localhost",
     'database':"noBroke" 
 }
@@ -175,9 +175,9 @@ def ETL():
         df_dados_feio = df_trusted.copy() # Pega os dados e copia da Camada 2 pra 3 (antes de tratar pra JSON)
         
         # Blindagem: Transforma qualquer NaN em None para o JSON exibir 'null' corretamente
-        df_client_matheus = df_dados_feio.astype(object).where(pd.notnull(df_dados_feio), None)
+        df_trusted_matheus = df_dados_feio.astype(object).where(pd.notnull(df_dados_feio), None)
         
-        Salvar_s3(df_client_matheus, CLIENT_CAMINHO) # Salva os dados do Cliente na S3
+        Salvar_s3(df_trusted_matheus, CLIENT_CAMINHO) # Salva os dados do Cliente na S3
 
         print("Limpando dados que serão exibidos nas dashboards")
 
@@ -189,15 +189,15 @@ def ETL():
         # ======================================================================
         # Garante o formato de data e remove repetições dentro do mesmo minuto
         # 1. Garante que a coluna de timestamp está no formato datetime do pandas
-        df_client_matheus['timestamp_dt'] = pd.to_datetime(df_client_matheus['timestamp'], format='%d-%m-%Y %H:%M:%S')
+        df_trusted_matheus['timestamp_dt'] = pd.to_datetime(df_trusted_matheus['timestamp'], format='%d-%m-%Y %H:%M:%S')
 
         # 2. Cria uma coluna de texto temporária apenas com Ano-Mês-Dia Hora:Minuto
-        df_client_matheus['timestamp'] = df_client_matheus['timestamp_dt'].dt.strftime('%Y-%m-%d %H:%M')
+        df_trusted_matheus['timestamp'] = df_trusted_matheus['timestamp_dt'].dt.strftime('%Y-%m-%d %H:%M')
 
         # 3. Remove duplicatas baseando-se nessa nova coluna de minutos
-        df_filtrado = df_client_matheus.drop_duplicates(subset=['timestamp'])
+        df_filtrado = df_trusted_matheus.drop_duplicates(subset=['timestamp'])
 
-        dados_json = []
+        df_client_matheus = []
 
         # Mudamos aqui para ler do 'df_filtrado'
         for _, linha in df_filtrado.iterrows():
@@ -218,11 +218,11 @@ def ETL():
             }
             
             # 4. Adiciona na lista final
-            dados_json.append(registro_limpo)
+            df_client_matheus.append(registro_limpo)
 
         # Salva no Note local (para debug/backup ou revisão)
         with open('matheus.json', 'w') as f:
-            json.dump(dados_json, f, indent=4, default=str)
+            json.dump(df_client_matheus, f, indent=4, default=str)
             # indent=4: JSON formatado (bonito)
             # default=str: converte tipos especiais (datetime) para string
 
