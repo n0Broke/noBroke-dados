@@ -901,7 +901,17 @@ def calcular_eta_ram(ram_atual, taxa_minuto):
         ram_restante = 100.0 - ram_atual
         if ram_restante <= 0:
             return "Ja atingiu 100%"
-        return f"{round(ram_restante / taxa_minuto, 2)} min"
+        tempo_minutos = ram_restante / taxa_minuto
+        if tempo_minutos >= 60:
+            horas = int(tempo_minutos // 60)
+            minutos_restantes = int(tempo_minutos % 60)
+            if minutos_restantes == 0:
+                return f"{horas} h"
+            else:
+                return f"{horas}h {minutos_restantes}min"
+        else:
+            return f"{round(tempo_minutos, 2)} min"
+            
     elif taxa_minuto < 0:
         return "Tendencia de Queda (Estavel)"
     else:
