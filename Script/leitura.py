@@ -10,18 +10,19 @@ from botocore.exceptions import ClientError, EndpointConnectionError
 from datetime import datetime, timedelta
 import time
 import numpy as np
+import glob
 
 # ANTEÇÃO: LINHA 174  É ONDE VOCÊ VAI COLOCAR OS ARQUIVOS SEPARADOS, MODIFIQUE LÁ
 
 # Configurações pra se conectar com banco de Dados (credenciais aqui)
 config = {
     'user':"root",
-    'password':"5",
+    'password':"sptech",
     'host':"localhost",
     'database':"noBroke" 
 }
 
-NOME_BUCKET = 'bucket.06-04-2026' # Nome do Bucket na sua S3
+NOME_BUCKET = 'buckettestenobroke' # Nome do Bucket na sua S3
 RAW_CAMINHO = 'RAW/' # Caminho dentro do Bucket até a pasta da Camada 1
 TRUSTED_CAMINHO = 'TRUSTED/Trusted.csv' # Caminho pra criar o Arquivo Trusted (Camada 2)
 CLIENT_CAMINHO = 'CLIENT/Client.csv' # Caminho para criar o Arquivo Client (Camada 3)
@@ -674,69 +675,83 @@ def ETL():
 
          # individual gabrielly
 
-#         print("Coletando os dados de produtividade do Jira")
-#         # Busca os dados do Jira
-#         print("Calculando taxa de SLA")
-#         try:
-#             resposta_mttr = requests.get("http://localhost:8080/api/mttr")
-#             dados_mttr = resposta_mttr.json()
-#             mttr_rapido = dados_mttr["maisRapido"]
-#             mttr_lento  = dados_mttr["maisLento"]
-#             print(f"MTTR mais rápido: {mttr_rapido}min | mais lento: {mttr_lento}min")
-#         except:
-#             mttr_rapido = 0
-#             mttr_lento  = 0
-#             print("Não foi possível buscar dados do Jira")
+        print("Coletando os dados de produtividade do Jira")
+        # Busca os dados do Jira
+        print("Calculando taxa de SLA")
+        try:
+            resposta_mttr = requests.get("http://localhost:8080/api/mttr")
+            dados_mttr = resposta_mttr.json()
+            mttr_rapido = dados_mttr["maisRapido"]
+            mttr_lento  = dados_mttr["maisLento"]
+            print(f"MTTR mais rápido: {mttr_rapido}min | mais lento: {mttr_lento}min")
+        except:
+            mttr_rapido = 0
+            mttr_lento  = 0
+            print("Não foi possível buscar dados do Jira")
 
-#         try:
-#             resposta_kpis = requests.get("http://localhost:8080/api/kpis")
-#             dados_kpis = resposta_kpis.json()
-#             incidentes_resolvidos = dados_kpis["incidentesResolvidos"]
-#         except:
-#             incidentes_resolvidos = 0
+        try:
+            resposta_kpis = requests.get("http://localhost:8080/api/kpis")
+            dados_kpis = resposta_kpis.json()
+            incidentes_resolvidos = dados_kpis["incidentesResolvidos"]
+        except:
+            incidentes_resolvidos = 0
 
-#         try:
-#             resposta_alertas = requests.get("http://localhost:8080/api/alertas-abertos")
-#             dados_alertas = resposta_alertas.json()
-#             alertas_abertos = dados_alertas["alertasAbertos"]
-#         except:
-#             alertas_abertos = 0
+        try:
+            resposta_alertas = requests.get("http://localhost:8080/api/alertas-abertos")
+            dados_alertas = resposta_alertas.json()
+            alertas_abertos = dados_alertas["alertasAbertos"]
+        except:
+            alertas_abertos = 0
 
-#         try:
-#             resposta_sla = requests.get("http://localhost:8080/api/sla")
-#             dados_sla = resposta_sla.json()
-#             taxa_sla = dados_sla["taxaSla"]
-#         except:
-#             taxa_sla = 0
+        try:
+            resposta_sla = requests.get("http://localhost:8080/api/sla")
+            dados_sla = resposta_sla.json()
+            taxa_sla = dados_sla["taxaSla"]
+        except:
+            taxa_sla = 0
 
-#         try:
-#             resposta_membros = requests.get("http://localhost:8080/api/membros")
-#             dados_membros = resposta_membros.json()
-#             membros = dados_membros["membros"]
-#         except:
-#             membros = []
+        try:
+            resposta_membros = requests.get("http://localhost:8080/api/membros")
+            dados_membros = resposta_membros.json()
+            membros = dados_membros["membros"]
+        except:
+            membros = []
 
-#         dados_gabrielly = {
-#             "timestamp": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
-#             "incidentes_resolvidos": incidentes_resolvidos,
-#             "alertas_abertos": alertas_abertos,
-#             "taxa_sla": taxa_sla,
-#             "mttr_mais_rapido_min": mttr_rapido,
-#             "mttr_mais_lento_min": mttr_lento,
-#             "membros": membros
-#         }
+        dados_gabrielly = {
+            "timestamp": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
+            "incidentes_resolvidos": incidentes_resolvidos,
+            "alertas_abertos": alertas_abertos,
+            "taxa_sla": taxa_sla,
+            "mttr_mais_rapido_min": mttr_rapido,
+            "mttr_mais_lento_min": mttr_lento,
+            "membros": membros
+        }
 
-#         with open("gabrielly.json", "w", encoding="utf-8") as f:
-#             json.dump(dados_gabrielly, f, indent=4, default=str)
+        with open("gabrielly.json", "w", encoding="utf-8") as f:
+            json.dump(dados_gabrielly, f, indent=4, default=str)
 
-#         with open("gabrielly.json", "rb") as f:
-#             s3_client.put_object(
-#                 Bucket=NOME_BUCKET,
-#                 Key="CLIENT/gabrielly.json",
-#                 Body=f,
-#                 ContentType="application/json"
-#             )
-#        print("Dados de produtividade enviados ao bucket")
+        with open("gabrielly.json", "rb") as f:
+            s3_client.put_object(
+                Bucket=NOME_BUCKET,
+                Key="CLIENT/gabrielly.json",
+                Body=f,
+                ContentType="application/json"
+            )
+        print("Dados de produtividade enviados ao bucket")
+
+        # tem um print no java que mostra o caminho que foi salvo o pdf, depois é so trocar o caminho aquiiii !!!!!!!
+        pdfs = glob.glob(r"C:\Users\gabri\OneDrive - SPTech School\CCOK\Linguagem de Programação\jirabroken\noBroke-java\Integracao_slack_jira1\relatorio-produtividade-*.pdf")
+        print(f"PDFs encontrados: {pdfs}")
+        for pdf in pdfs:
+            nome_arquivo = pdf.split("\\")[-1]
+            with open(pdf, "rb") as f:
+                s3_client.put_object(
+                Bucket=NOME_BUCKET,
+                Key="RELATORIOS/" + nome_arquivo,
+                Body=f,
+                ContentType="application/pdf"
+         )
+        print(f"PDF enviado pro S3")
 
 
 # # Fim Gabrielly Individual
