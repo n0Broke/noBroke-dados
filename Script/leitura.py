@@ -21,7 +21,7 @@ config = {
     'database':"noBroke" 
 }
 
-NOME_BUCKET = 'buckettestenobroke' # Nome do Bucket na sua S3
+NOME_BUCKET = 'bucket.06-04-2026' # Nome do Bucket na sua S3
 RAW_CAMINHO = 'RAW/' # Caminho dentro do Bucket até a pasta da Camada 1
 TRUSTED_CAMINHO = 'TRUSTED/Trusted.csv' # Caminho pra criar o Arquivo Trusted (Camada 2)
 CLIENT_CAMINHO = 'CLIENT/Client.csv' # Caminho para criar o Arquivo Client (Camada 3)
@@ -89,7 +89,9 @@ def buscar_medidas(nome_servidor,):
 def ETL():
     try:
         # Tenta ir nos dados do caminho que vc passsou, criando um item com uma lista
-        print("(EXTRACT) Coletando dados brutos do diretório 'raw'")
+        print("+------------------------------------------------------------------------------+")
+        print("Iniciando o tratamento das métricas dos servidores")
+        print("Coletando dados brutos do diretório 'raw'")
         listar_csv_raw = s3_client.list_objects_v2(Bucket=NOME_BUCKET, Prefix=RAW_CAMINHO)
 
         # Trata essa lista, criando outra com agora só arquivos que terminam com .csv
@@ -112,13 +114,11 @@ def ETL():
         df_raw = pd.concat(lista_csv, ignore_index=True)
 
         df_trusted = df_raw.copy()
-        print("(TRANSFORM) Removendo cópias")
         df_trusted = df_trusted.drop_duplicates() # Remove dados Duplicados
 
         # Define colunas que NUNCA vão ser anuladas (identificação)
         colunas_preservar = ['fk_empresa','id_servidor', 'home_broker', 'timestamp', 'processo_maior_consumo']
 
-        print("(TRANSFORM) Removendo valores iguais a 0")
         colunas_numericas = df_trusted.select_dtypes(include=['number']).columns # Colunas apenas de números
         for i in colunas_numericas: # Loop nessa lista de cima
             if i in colunas_preservar:
@@ -128,7 +128,7 @@ def ETL():
         # Identifica todos os servidores únicos presentes no DataFrame para tratar um por um
         servidores_presentes = df_trusted['home_broker'].dropna().unique()
 
-        print("(TRANSFORM) Aplicando regras de monitoramento individuais por servidor")
+        print("Aplicando regras de monitoramento individuais por servidor")
         for broker in servidores_presentes:
             # Busca as regras específicas deste servidor no Banco de Dados
             mudar_medidas = buscar_medidas(broker)
@@ -169,7 +169,9 @@ def ETL():
         pd.DataFrame(df_trusted).to_csv("trusted.csv", encoding="utf-8", sep=";", index=False)
         Salvar_s3(df_trusted, TRUSTED_CAMINHO)
 
-        print("(LOADING) Mandando dados para o diretório 'client'")
+        print("Enviando os dados parametrizados ao diretório 'client'")
+        print("+------------------------------------------------------------------------------+")
+
         df_dados_feio = df_trusted.copy() # Pega os dados e copia da Camada 2 pra 3 (antes de tratar pra JSON)
         
         # Blindagem: Transforma qualquer NaN em None para o JSON exibir 'null' corretamente
@@ -177,7 +179,7 @@ def ETL():
         
         Salvar_s3(df_client_matheus, CLIENT_CAMINHO) # Salva os dados do Cliente na S3
 
-        print("(LOADING) Convertendo Client para JSON e enviando para o site na EC2...")
+        print("Limpando dados que serão exibidos nas dashboards")
 
             # === ADICIONE ESTE BLOCO AQUI PARA CRIAR OS LIMITES DIRETO NA FUNÇÃO ===
         resultados = buscar_medidas("NB1-luiz") # Busca direto do banco usando o nome correto do servidor
@@ -224,23 +226,21 @@ def ETL():
             # indent=4: JSON formatado (bonito)
             # default=str: converte tipos especiais (datetime) para string
 
-        print("(LOADING) Enviando o matheus.json pro bucket")
-
         # Aqui envia o JSON para o S3
         with open('matheus.json', 'rb') as f:
             s3_client.put_object(Bucket=NOME_BUCKET,
                                  Key='CLIENT/matheus.json',
                                  Body=f,
                                  ContentType='application/json')
-        print("JSON enviado para o bucket com sucesso.")
+        print("Dados limpos enviados ao bucket.")
 
             # ===============================================================
             # Aqui você coloca o seu código que vai criar o arquivo separado
             # Arquivos do individuais no caso
-
-        print("Fim do individual Matheus")
-
+        print("+------------------------------------------------------------------------------+")
         #isa_individual
+
+        print("Iniciando tratamento das requisições")
         df_trusted_isabela = df_raw.copy()
 
         df_trusted_isabela = df_trusted_isabela[
@@ -255,7 +255,7 @@ def ETL():
                 'latencia_ms'
             ]
         ]
-
+        print("Classificando as requisições devidamente")
         df_trusted_isabela["categoria"] = (
             df_trusted_isabela["endpoint"]
             .fillna("")
@@ -471,12 +471,14 @@ def ETL():
             #Fim isa individual
             # ======================================================
             # Começo Luiz Individual
-        print('Individual Luiz')
+
+
+        print('+------------------------------------------------------------------------------+')
+        print('Apurando dados para a previsão da RAM')
 
         df_trusted_luiz = df_raw.copy()
         df_trusted_luiz = df_trusted_luiz[['id_servidor','fk_empresa','home_broker','timestamp','ram_percent','swap_percent']]
 
-        print('Transformando os valores do csv em numerais')
         df_trusted_luiz['timestamp'] = pd.to_datetime(df_trusted_luiz['timestamp'], dayfirst=True, errors='coerce')
         
         # CORREÇÃO 1: Remover duplicidades temporais exatas que travam o desvio padrão em zero
@@ -499,6 +501,7 @@ def ETL():
 
         janela_previsao = 24
 
+        print("Efetuando os cálculos de correlação e temporizadores")
         for i in range(len(df_trusted_luiz)):
              servidor_atual = df_trusted_luiz.loc[i, 'home_broker']
              horario_registro = df_trusted_luiz.loc[i, 'timestamp']
@@ -535,21 +538,21 @@ def ETL():
              for faixa in faixas_nomes:
                  historico_faixas[faixa].append(int(contagem_janela.get(faixa, 0)))
 
-        # Inserindo os vetores calculados de volta ao DataFrame de Confiança
+        # Inserindo os vetores calculados de volta ao dataframe 
         df_trusted_luiz['correlacao_ram_swap'] = correlacoes
         df_trusted_luiz['tendencia_ram_por_minuto'] = tendencias_minuto
         df_trusted_luiz['tendencia_ram_por_hora'] = tendencia_hora
         df_trusted_luiz['hora_registro'] = horas_registro
         df_trusted_luiz['ETA'] = etas
 
-        # Adicionando as colunas de contagem ao DataFrame
+        # Adicionando as colunas de contagem ao dataframe
         for faixa in faixas_nomes:
             df_trusted_luiz[faixa] = historico_faixas[faixa]
 
         df_projeções = pd.DataFrame(projeções_futuras, columns=['proj1', 'proj2', 'proj3', 'proj4', 'proj5'])
         df_trusted_luiz = pd.concat([df_trusted_luiz, df_projeções], axis=1)
 
-        print("(LOADING) Enviando o luiz_trusted csv pro bucket")
+        print("Enviando os dados de previsão ao bucket")
         # Mantendo as suas funções originais de envio
         Salvar_s3(df_trusted_luiz, "TRUSTED/luiz_trusted.csv")
         pd.DataFrame(df_trusted_luiz).to_csv("luiz_trusted.csv", encoding="utf-8", sep=";", index=False)
@@ -570,14 +573,13 @@ def ETL():
              )          
                 # ======================================================
                 # Começo Gabriel Individual
-        print('Individual do Apela Pato')
+        print('+------------------------------------------------------------------------------+')
+        print('Classificando Criticidade dos valores coletados')
 
 
         df_trusted_gabriel = df_raw.copy()
 
         df_trusted_gabriel = df_trusted_gabriel[['id_servidor','fk_empresa','home_broker','cpu_percent', 'ram_total_gb', 'ram_used_gb', 'disk_percent', 'ram_percent', 'timestamp']]
-
-        print('Transformando os valores do csv em numerais')
 
         df_trusted_gabriel['timestamp'] = pd.to_datetime(df_trusted_gabriel['timestamp'], dayfirst=True, errors='coerce')
         df_trusted_gabriel = df_trusted_gabriel.sort_values(by=['home_broker', 'timestamp']).reset_index(drop=True)
@@ -628,7 +630,6 @@ def ETL():
                     status.append(status_linha)
         df_trusted_gabriel['status'] = status
 
-        print("(LOADING) Enviando o gabriel_trusted csv pro bucket")
         Salvar_s3(df_trusted_gabriel, "TRUSTED/gabriel_trusted.csv")
         pd.DataFrame(df_trusted_gabriel).to_csv("gabriel_trusted.csv", encoding="utf-8", sep=";", index=False)
         df_client_gabriel = df_trusted_gabriel.copy()
@@ -664,8 +665,8 @@ def ETL():
                 ContentType="application/json"
                 )
 
-        print("(LOADING) Iniciando tratamento de rede...")
-
+        print("Os dados de criticidade foram enviados ao bucket")
+        print("+------------------------------------------------------------------------------+")
         # 1. Fazendo Trusted (Camada 2)
 
         
@@ -673,9 +674,9 @@ def ETL():
 
          # individual gabrielly
 
-#         print("individual gabrielly")
+#         print("Coletando os dados de produtividade do Jira")
 #         # Busca os dados do Jira
-#         print("inicio")
+#         print("Calculando taxa de SLA")
 #         try:
 #             resposta_mttr = requests.get("http://localhost:8080/api/mttr")
 #             dados_mttr = resposta_mttr.json()
@@ -735,12 +736,17 @@ def ETL():
 #                 Body=f,
 #                 ContentType="application/json"
 #             )
+#        print("Dados de produtividade enviados ao bucket")
 
 
 # # Fim Gabrielly Individual
 # # ======================================================
 
         # Filtrando somente as colunas que eu quero pegar
+        
+        print("+------------------------------------------------------------------------------+")
+        print("Iniciando tratamento de rede...")
+
         df_trusted_richard = df_raw[['id_servidor', 'home_broker', 'timestamp', 'latencia_resposta_ms', 'net_bytes_sent_gb', 'net_bytes_recv_gb', 'jitter_ms', 'packet_loss_percent', 'upload_mbps', 'download_mbps']].copy()
 
         # Salva o CSV na Camada do trusted localmente e no S3 (Sempre salvando o Trusted para registro)
@@ -756,7 +762,7 @@ def ETL():
         if df_trusted_richard[cols_rede].isnull().all(axis=None):
             print(f"TRATAMENTO: O servidor {nome_do_servidor} não quer coletar dados de Rede ou deu algum erro. Pulando script de JSON.")
         else:
-            print(f"(LOADING) Gerando arquivo JSON de Latência para: {nome_do_servidor}")
+            print(f"Gerando arquivo JSON de Latência para: {nome_do_servidor}")
             df_client_richard = df_trusted_richard.copy()
 
             # Transforma qualquer NaN em 0 para o JSON não quebrar no site
@@ -770,15 +776,15 @@ def ETL():
                 json.dump(dados_richard_json, f, indent=4, default=str)
 
             # Envia o JSON para a pasta client no S3
-            print("[LOADING] Enviando JSON de Rede e Latêncai para o bucket...")
+            print("Enviando JSON de Rede e Latêncai para o bucket...")
             with open('latencia_richard.json', 'rb') as f:
                 s3_client.put_object(Bucket=NOME_BUCKET,
                                      Key=CLIENT_RICHARD_CAMINHO,
                                      Body=f,
                                      ContentType='application/json')
 
-            print("[LOADING] Arquivo JSON de Rede e Latência enviado com sucesso!")
-
+            print("Arquivo JSON de Rede e Latência enviado com sucesso!")
+            print("+------------------------------------------------------------------------------+")
         # Fim richard individual
         # ===============================================================
 
@@ -910,7 +916,7 @@ def calcular_projeções_futuras(ram_atual, taxa_minuto, df_luiz):
 def calcular_tendencia_ram_hora(taxa_minuto):
      taxa_hora = taxa_minuto*60
 
-     return taxa_hora
+     return round(taxa_hora, 4)
 
 def variacao_percentual(atual, anterior):
     if anterior == 0:
