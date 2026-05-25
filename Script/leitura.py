@@ -17,12 +17,12 @@ import glob
 # Configurações pra se conectar com banco de Dados (credenciais aqui)
 config = {
     'user':"root",
-    'password':"sptech",
-    'host':"localhost",
-    'database':"noBroke" 
+    'password':"",
+    'host':"",
+    'database':"" 
 }
 
-NOME_BUCKET = 'buckettestenobroke' # Nome do Bucket na sua S3
+NOME_BUCKET = '' # Nome do Bucket na sua S3
 RAW_CAMINHO = 'RAW/' # Caminho dentro do Bucket até a pasta da Camada 1
 TRUSTED_CAMINHO = 'TRUSTED/Trusted.csv' # Caminho pra criar o Arquivo Trusted (Camada 2)
 CLIENT_CAMINHO = 'CLIENT/Client.csv' # Caminho para criar o Arquivo Client (Camada 3)
@@ -34,9 +34,10 @@ CLIENT_RICHARD_CAMINHO = 'CLIENT/richard.json'
 # Credenciais da AWS (Só pegar na página quando tu liga a AWS)
 s3_client = boto3.client(
     's3',
-    aws_access_key_id = credenciais.AWS_ACCESS_KEY,
-    aws_secret_access_key = credenciais.AWS_SECRET_KEY,
-    aws_session_token = credenciais.AWS_SESSION_TOKEN
+    aws_access_key_id = "",
+    aws_secret_access_key = "",
+    aws_session_token = ""
+
 )
 
 # Função de Buscar medidas e Componentes no banco de dados, ela:
@@ -601,6 +602,7 @@ def ETL():
         cpuCritica = []
         ramCritica = []
         discoCritico = []
+        
 
         for i in range(len(df_trusted_gabriel)):
                     servidor_atual.append(df_trusted_gabriel.loc[i, 'home_broker'])
@@ -615,34 +617,31 @@ def ETL():
         limites = {}
         for linha in resultados:
                 limites[linha['nome_componente']] = float(linha['valor_max_critico'])
-
-
         for i in range(len(df_trusted_gabriel)):
-                    status_linha = "Normal"
-                    status_cpu = "Normal"
-                    status_ram = "Normal"
-                    status_disco = "Normal"
-                    if 'cpu_percent' in limites:
+            status_linha = "Normal"
+            status_cpu = "Normal"
+            status_ram = "Normal"
+            status_disco = "Normal"
+            if 'cpu_percent' in limites:
                         if limites['cpu_percent'] < cpu[i]:
                             status_linha = "Crítico"
                             status_cpu = "Crítico"
-                            
-                    if 'ram_percent' in limites:
+            if 'ram_percent' in limites:
                      if limites['ram_percent'] < ram_percent[i]:
                             status_linha = "Crítico"
                             status_ram = "Crítico"
-                    if 'ram_used_gb' in limites:
+            if 'ram_used_gb' in limites:
                         if limites['ram_used_gb'] < (ram_total[i] - ram_used[i]):
                             status_linha = "Crítico"
                             status_ram = "Crítico"
-                    if 'disk_percent' in limites:
+            if 'disk_percent' in limites:
                         if limites['disk_percent'] < disk[i]:
                             status_linha = "Crítico"
                             status_disco = "Crítico"
-                    status.append(status_linha)
-                    cpuCritica.append(satus_cpu)
-                    ramCritica.append(status_ram)
-                    discoCritico.append(status_disco)
+            status.append(status_linha)
+            cpuCritica.append(status_cpu)
+            ramCritica.append(status_ram)
+            discoCritico.append(status_disco)
         df_trusted_gabriel['status'] = status
         df_trusted_gabriel['ramCritica'] = ramCritica
         df_trusted_gabriel['discoCritico'] = discoCritico
