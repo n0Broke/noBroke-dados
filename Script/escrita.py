@@ -49,7 +49,7 @@ requisicoes = {
 
 config = {
     'user': "root",
-    'password':"",
+    'password':"Mywtty135790",
     'host': "localhost",
     'database': "noBroke" 
 }
@@ -57,7 +57,7 @@ config = {
 fuso_brasil = pytz.timezone('America/Sao_Paulo')
 
 
-NAME_BUCKET = '' #Vamos mudar pra um nome do projeto
+NAME_BUCKET = 'buckettestenobroke' #Vamos mudar pra um nome do projeto
 
 s3_client = boto3.client(
     's3',

@@ -17,12 +17,12 @@ import glob
 # Configurações pra se conectar com banco de Dados (credenciais aqui)
 config = {
     'user':"root",
-    'password':"",
-    'host':"",
-    'database':"" 
+    'password':"Mywtty135790",
+    'host':"localhost",
+    'database':"noBroke" 
 }
 
-NOME_BUCKET = '' # Nome do Bucket na sua S3
+NOME_BUCKET = 'buckettestenobroke' # Nome do Bucket na sua S3
 RAW_CAMINHO = 'RAW/' # Caminho dentro do Bucket até a pasta da Camada 1
 TRUSTED_CAMINHO = 'TRUSTED/Trusted.csv' # Caminho pra criar o Arquivo Trusted (Camada 2)
 CLIENT_CAMINHO = 'CLIENT/Client.csv' # Caminho para criar o Arquivo Client (Camada 3)
@@ -34,9 +34,9 @@ CLIENT_RICHARD_CAMINHO = 'CLIENT/richard.json'
 # Credenciais da AWS (Só pegar na página quando tu liga a AWS)
 s3_client = boto3.client(
     's3',
-    aws_access_key_id = "",
-    aws_secret_access_key = "",
-    aws_session_token = ""
+    aws_access_key_id = credenciais.AWS_ACCESS_KEY,
+    aws_secret_access_key = credenciais.AWS_SECRET_KEY,
+    aws_session_token = credenciais.AWS_SESSION_TOKEN
 
 )
 
@@ -119,7 +119,7 @@ def ETL():
         df_trusted = df_trusted.drop_duplicates() # Remove dados Duplicados
 
         # Define colunas que NUNCA vão ser anuladas (identificação)
-        colunas_preservar = ['fk_empresa','id_servidor', 'home_broker', 'timestamp', 'processo_maior_consumo']
+        colunas_preservar = ['fk_empresa','id_servidor', 'home_broker', 'timestamp']
 
         colunas_numericas = df_trusted.select_dtypes(include=['number']).columns # Colunas apenas de números
         for i in colunas_numericas: # Loop nessa lista de cima
@@ -174,10 +174,11 @@ def ETL():
         print("Enviando os dados parametrizados ao diretório 'client'")
         print("+------------------------------------------------------------------------------+")
 
-        df_dados_feio = df_trusted.copy() # Pega os dados e copia da Camada 2 pra 3 (antes de tratar pra JSON)
+        df_trusted_matheus = df_raw.copy() # Pega os dados e copia da Camada 2 pra 3 (antes de tratar pra JSON)
         
-        # Blindagem: Transforma qualquer NaN em None para o JSON exibir 'null' corretamente
-        df_trusted_matheus = df_dados_feio.astype(object).where(pd.notnull(df_dados_feio), None)
+        colunas_filtradas = ['id_servidor', 'fk_empresa', 'home_broker', 'timestamp'] + [col for col in df_trusted_matheus.columns if col.endswith('_percent')]
+
+        df_trusted_matheus = df_trusted_matheus[colunas_filtradas]
         
         Salvar_s3(df_trusted_matheus, CLIENT_CAMINHO) # Salva os dados do Cliente na S3
 
@@ -216,7 +217,7 @@ def ETL():
             # 3. Filtra os nulos do registro atual e remove as chaves indesejadas
             registro_limpo = {
                 chave: valor for chave, valor in registro.items()
-                if pd.notnull(valor) and chave != "processo_maior_consumo"
+                if pd.notnull(valor)
             }
             
             # 4. Adiciona na lista final
