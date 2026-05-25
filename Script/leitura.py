@@ -598,6 +598,9 @@ def ETL():
         ram_percent = []
         servidor_atual = []
         status = []
+        cpuCritica = []
+        ramCritica = []
+        discoCritico = []
 
         for i in range(len(df_trusted_gabriel)):
                     servidor_atual.append(df_trusted_gabriel.loc[i, 'home_broker'])
@@ -611,25 +614,39 @@ def ETL():
         print("Chamou com o nome certo ", a)
         limites = {}
         for linha in resultados:
-                limites[linha['nome_componente']] = double(linha['valor_max_critico'])
+                limites[linha['nome_componente']] = float(linha['valor_max_critico'])
 
 
         for i in range(len(df_trusted_gabriel)):
                     status_linha = "Normal"
+                    status_cpu = "Normal"
+                    status_ram = "Normal"
+                    status_disco = "Normal"
                     if 'cpu_percent' in limites:
                         if limites['cpu_percent'] < cpu[i]:
                             status_linha = "Crítico"
+                            status_cpu = "Crítico"
+                            
                     if 'ram_percent' in limites:
                      if limites['ram_percent'] < ram_percent[i]:
                             status_linha = "Crítico"
+                            status_ram = "Crítico"
                     if 'ram_used_gb' in limites:
                         if limites['ram_used_gb'] < (ram_total[i] - ram_used[i]):
                             status_linha = "Crítico"
+                            status_ram = "Crítico"
                     if 'disk_percent' in limites:
                         if limites['disk_percent'] < disk[i]:
                             status_linha = "Crítico"
+                            status_disco = "Crítico"
                     status.append(status_linha)
+                    cpuCritica.append(satus_cpu)
+                    ramCritica.append(status_ram)
+                    discoCritico.append(status_disco)
         df_trusted_gabriel['status'] = status
+        df_trusted_gabriel['ramCritica'] = ramCritica
+        df_trusted_gabriel['discoCritico'] = discoCritico
+        df_trusted_gabriel['cpuCritica'] = cpuCritica
 
         Salvar_s3(df_trusted_gabriel, "TRUSTED/gabriel_trusted.csv")
         pd.DataFrame(df_trusted_gabriel).to_csv("gabriel_trusted.csv", encoding="utf-8", sep=";", index=False)
@@ -643,7 +660,7 @@ def ETL():
         df_client_gabriel['minuto_filtro'] = df_client_gabriel['timestamp_dt'].dt.strftime('%Y-%m-%d %H:%M')
 
         # 3. Remove duplicatas baseando-se na coluna de minutos e gera o df_filtrado
-        df_filtrado = df_client_gabriel.drop_duplicates(subset=['minuto_filtro'])
+        df_filtrado = df_client_gabriel.drop_duplicates(subset=['home_broker', 'minuto_filtro'])
 
         # 3.5. Altera o formato para remover os segundos antes de apagar a coluna de apoio
         df_filtrado['timestamp'] = df_filtrado['timestamp_dt'].dt.strftime('%d-%m-%Y %H:%M')
