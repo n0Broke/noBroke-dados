@@ -17,7 +17,7 @@ import glob
 # Configurações pra se conectar com banco de Dados (credenciais aqui)
 config = {
     'user':"root",
-    'password':"Mywtty135790",
+    'password':"",
     'host':"localhost",
     'database':"noBroke" 
 }
@@ -34,10 +34,9 @@ CLIENT_RICHARD_CAMINHO = 'CLIENT/richard.json'
 # Credenciais da AWS (Só pegar na página quando tu liga a AWS)
 s3_client = boto3.client(
     's3',
-    aws_access_key_id = credenciais.AWS_ACCESS_KEY,
-    aws_secret_access_key = credenciais.AWS_SECRET_KEY,
-    aws_session_token = credenciais.AWS_SESSION_TOKEN
-
+    aws_access_key_id = "",
+    aws_secret_access_key = "",
+    aws_session_token = ""
 )
 
 # Função de Buscar medidas e Componentes no banco de dados, ela:
@@ -578,99 +577,89 @@ def ETL():
                 # Começo Gabriel Individual
         print('+------------------------------------------------------------------------------+')
         print('Classificando Criticidade dos valores coletados')
-
-
         df_trusted_gabriel = df_raw.copy()
 
-        df_trusted_gabriel = df_trusted_gabriel[['id_servidor','fk_empresa','home_broker','cpu_percent', 'ram_total_gb', 'ram_used_gb', 'disk_percent', 'ram_percent', 'timestamp']]
+        df_trusted_gabriel = df_trusted_gabriel[[
+        'id_servidor','fk_empresa','home_broker',
+        'cpu_percent','ram_total_gb','ram_used_gb',
+        'disk_percent','ram_percent','timestamp']]
 
-        df_trusted_gabriel['timestamp'] = pd.to_datetime(df_trusted_gabriel['timestamp'], dayfirst=True, errors='coerce')
-        df_trusted_gabriel = df_trusted_gabriel.sort_values(by=['home_broker', 'timestamp']).reset_index(drop=True)
-        df_trusted_gabriel['ram_total_gb'] = pd.to_numeric(df_trusted_gabriel['ram_total_gb'], errors='coerce')
-        df_trusted_gabriel['ram_percent'] = pd.to_numeric(df_trusted_gabriel['ram_percent'], errors='coerce')
-        df_trusted_gabriel['ram_used_gb'] = pd.to_numeric(df_trusted_gabriel['ram_used_gb'], errors='coerce')
-        df_trusted_gabriel['disk_percent'] = pd.to_numeric(df_trusted_gabriel['disk_percent'], errors='coerce')
-        df_trusted_gabriel['cpu_percent'] = pd.to_numeric(df_trusted_gabriel['cpu_percent'], errors='coerce')
+        df_trusted_gabriel['timestamp'] = pd.to_datetime(
+        df_trusted_gabriel['timestamp'],
+        dayfirst=True,
+        errors='coerce'
+        )
 
-        horas_registro = []
-        cpu = []
-        ram_used = []
-        ram_total = []
-        disk = []
-        ram_percent = []
-        servidor_atual = []
-        status = []
-        cpuCritica = []
-        ramCritica = []
-        discoCritico = []
-        
+        num_cols = ['cpu_percent','ram_total_gb','ram_used_gb','disk_percent','ram_percent']
 
-        for i in range(len(df_trusted_gabriel)):
-                    servidor_atual.append(df_trusted_gabriel.loc[i, 'home_broker'])
-                    horas_registro.append(df_trusted_gabriel.loc[i, 'timestamp'])
-                    ram_percent.append(df_trusted_gabriel.loc[i, 'ram_percent'])
-                    cpu.append(df_trusted_gabriel.loc[i,'cpu_percent'])
-                    ram_used.append(df_trusted_gabriel.loc[i, 'ram_used_gb'])
-                    disk.append(df_trusted_gabriel.loc[i,'disk_percent'])
-                    ram_total.append(df_trusted_gabriel.loc[i,'ram_total_gb'])
+        df_trusted_gabriel[num_cols] = df_trusted_gabriel[num_cols].apply(
+        pd.to_numeric,
+        errors='coerce'
+        )
+
+        df_trusted_gabriel = df_trusted_gabriel.sort_values(
+        by=['home_broker','timestamp']
+        ).reset_index(drop=True)
+
         resultados = buscar_medidas(a)
-        print("Chamou com o nome certo ", a)
-        limites = {}
-        for linha in resultados:
-                limites[linha['nome_componente']] = float(linha['valor_max_critico'])
-        for i in range(len(df_trusted_gabriel)):
-            status_linha = "Normal"
-            status_cpu = "Normal"
-            status_ram = "Normal"
-            status_disco = "Normal"
-            if 'cpu_percent' in limites:
-                        if limites['cpu_percent'] < cpu[i]:
-                            status_linha = "Crítico"
-                            status_cpu = "Crítico"
-            if 'ram_percent' in limites:
-                     if limites['ram_percent'] < ram_percent[i]:
-                            status_linha = "Crítico"
-                            status_ram = "Crítico"
-            if 'ram_used_gb' in limites:
-                        if limites['ram_used_gb'] < (ram_total[i] - ram_used[i]):
-                            status_linha = "Crítico"
-                            status_ram = "Crítico"
-            if 'disk_percent' in limites:
-                        if limites['disk_percent'] < disk[i]:
-                            status_linha = "Crítico"
-                            status_disco = "Crítico"
-            status.append(status_linha)
-            cpuCritica.append(status_cpu)
-            ramCritica.append(status_ram)
-            discoCritico.append(status_disco)
-        df_trusted_gabriel['status'] = status
-        df_trusted_gabriel['ramCritica'] = ramCritica
-        df_trusted_gabriel['discoCritico'] = discoCritico
-        df_trusted_gabriel['cpuCritica'] = cpuCritica
 
-        Salvar_s3(df_trusted_gabriel, "TRUSTED/gabriel_trusted.csv")
-        pd.DataFrame(df_trusted_gabriel).to_csv("gabriel_trusted.csv", encoding="utf-8", sep=";", index=False)
+        limites = {
+        linha['nome_componente']: float(linha['valor_max_critico'])
+        for linha in resultados
+            }
+
+        print("Limites carregados:", limites)
+
+        df_trusted_gabriel['status'] = "Normal"
+        df_trusted_gabriel['cpuCritica'] = "Normal"
+        df_trusted_gabriel['ramCritica'] = "Normal"
+        df_trusted_gabriel['discoCritico'] = "Normal"
+        if 'cpu_percent' in limites:
+            mask = df_trusted_gabriel['cpu_percent'] > limites['cpu_percent']
+            df_trusted_gabriel.loc[mask, ['status','cpuCritica']] = "Crítico"
+
+        if 'ram_percent' in limites:
+            mask = df_trusted_gabriel['ram_percent'] > limites['ram_percent']
+            df_trusted_gabriel.loc[mask, ['status','ramCritica']] = "Crítico"
+
+        if 'disk_percent' in limites:
+            mask = df_trusted_gabriel['disk_percent'] > limites['disk_percent']
+            df_trusted_gabriel.loc[mask, ['status','discoCritico']] = "Crítico"
+
+        df_trusted_gabriel.to_csv(
+            "gabriel_trusted.csv",
+            encoding="utf-8",
+            sep=";",
+            index=False
+            )
+
+# =========================
+# CLIENT LAYER (JSON)
+# =========================
         df_client_gabriel = df_trusted_gabriel.copy()
-        # # Garante o formato de data e remove repetições dentro do mesmo minuto
 
-        # 1. Garante que a coluna de timestamp está no formato datetime do pandas
-        df_client_gabriel['timestamp_dt'] = pd.to_datetime(df_client_gabriel['timestamp'], format='%d-%m-%Y %H:%M:%S')
+        df_client_gabriel['timestamp_dt'] = pd.to_datetime(
+        df_client_gabriel['timestamp'],
+        errors='coerce'
+            )
 
-        # 2. Cria uma coluna temporária APENAS para o critério do filtro (sem segundos)
         df_client_gabriel['minuto_filtro'] = df_client_gabriel['timestamp_dt'].dt.strftime('%Y-%m-%d %H:%M')
 
-        # 3. Remove duplicatas baseando-se na coluna de minutos e gera o df_filtrado
-        df_filtrado = df_client_gabriel.drop_duplicates(subset=['home_broker', 'minuto_filtro'])
+        df_filtrado = df_client_gabriel.drop_duplicates(
+            subset=['home_broker','minuto_filtro']
+            )
 
-        # 3.5. Altera o formato para remover os segundos antes de apagar a coluna de apoio
         df_filtrado['timestamp'] = df_filtrado['timestamp_dt'].dt.strftime('%d-%m-%Y %H:%M')
 
-        # 4. Remove as colunas auxiliares do df_filtrado para não irem para o JSON final
-        df_filtrado = df_filtrado.drop(columns=['timestamp_dt', 'minuto_filtro'], errors='ignore')
+        df_filtrado = df_filtrado.drop(columns=['timestamp_dt','minuto_filtro'], errors='ignore')
 
-        # 5. Converte o DF FILTRADO para dicionário (Garantindo que use o df_filtrado aqui)
-        dados_gabriel = df_filtrado.astype(object).where(pd.notnull(df_filtrado), None)
-        df_client_gabriel_dict = dados_gabriel.to_dict(orient="records")
+# =========================
+# SALVAR JSON LOCAL
+# =========================
+        df_client_gabriel_dict = df_filtrado.astype(object).where(
+        pd.notnull(df_filtrado),
+         None
+        ).to_dict(orient="records")
 
         with open("gabriel.json", "w", encoding="utf-8") as f:
                 json.dump(df_client_gabriel_dict, f, indent=4, default=str)

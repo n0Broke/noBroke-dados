@@ -49,7 +49,7 @@ requisicoes = {
 
 config = {
     'user': "root",
-    'password':"Mywtty135790",
+    'password':"",
     'host': "localhost",
     'database': "noBroke" 
 }
@@ -61,10 +61,10 @@ NAME_BUCKET = 'buckettestenobroke' #Vamos mudar pra um nome do projeto
 
 s3_client = boto3.client(
     's3',
-    aws_access_key_id = credenciais.AWS_ACCESS_KEY,
-    aws_secret_access_key = credenciais.AWS_SECRET_KEY,
-    aws_session_token = credenciais.AWS_SESSION_TOKEN
-)
+    aws_access_key_id = "",
+    aws_secret_access_key = "",
+    aws_session_token = ""
+    )
 
 resultados = {
     "fk_empresa": [],
